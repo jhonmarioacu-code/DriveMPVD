@@ -11,6 +11,7 @@ from app.infrastructure.exceptions import InfrastructureError
 from app.infrastructure.logging import configure_logging
 from app.presentation.api.router import create_api_router
 from app.presentation.api.v1.auth import AuthRouteUseCases
+from app.presentation.api.v1.storage import StorageRouteUseCases
 from app.presentation.auth import AuthCookiePolicy
 from app.presentation.errors.handlers import register_exception_handlers
 from app.presentation.middleware.authentication import AuthenticationMiddleware
@@ -73,6 +74,17 @@ def create_application(
         logout=active_container.logout,
         revoke_all=active_container.revoke_all_sessions,
     )
+    storage_use_cases = StorageRouteUseCases(
+        list_entries=active_container.list_folder_entries,
+        get_file=active_container.get_file_details,
+        create_folder=active_container.create_folder,
+        rename_entry=active_container.rename_entry,
+        move_entry=active_container.move_entry,
+        copy_entry=active_container.copy_entry,
+        trash_entry=active_container.trash_entry,
+        restore_entry=active_container.restore_entry,
+        permanently_delete=active_container.permanently_delete,
+    )
     app.add_middleware(
         AuthenticationMiddleware,
         authenticate=active_container.authenticate_access,
@@ -96,6 +108,7 @@ def create_application(
             active_container.get_health,
             active_container.get_readiness,
             auth_use_cases,
+            storage_use_cases,
             cookie_policy,
         ),
         prefix=active_settings.api_prefix,
