@@ -19,6 +19,7 @@ from app.application.exceptions import (
     DependencyUnavailableError,
     RateLimitExceededError,
     ResourceNotFoundError,
+    UploadOffsetMismatchError,
 )
 from app.domain.exceptions import DomainError
 from app.presentation.schemas.envelope import ApiError, ErrorDetail, error_response
@@ -80,6 +81,8 @@ async def handle_application_error(
         status_code = status.HTTP_404_NOT_FOUND
     elif isinstance(exc, ConflictError):
         status_code = status.HTTP_409_CONFLICT
+        if isinstance(exc, UploadOffsetMismatchError):
+            headers = {"Upload-Offset": str(exc.expected_offset)}
     elif isinstance(exc, ApplicationValidationError):
         status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     elif isinstance(exc, DependencyUnavailableError):

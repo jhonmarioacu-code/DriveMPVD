@@ -4,9 +4,12 @@ from dataclasses import dataclass
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Request, Response, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, status
 
 from app.application.dtos.storage import (
+    AppendUploadChunkCommandDTO,
+    CancelUploadCommandDTO,
+    CompleteUploadCommandDTO,
     CopyEntryCommandDTO,
     CreateFolderCommandDTO,
     FileDetailsDTO,
@@ -15,20 +18,28 @@ from app.application.dtos.storage import (
     PermanentlyDeleteCommandDTO,
     RenameEntryCommandDTO,
     RestoreEntryCommandDTO,
+    StartUploadCommandDTO,
     StorageEntryDTO,
     StorageListFiltersDTO,
     TrashEntryCommandDTO,
     TrashItemDTO,
+    UploadChunkResultDTO,
+    UploadSessionDTO,
 )
 from app.application.use_cases.storage import (
+    AppendUploadChunkUseCase,
+    CancelUploadUseCase,
+    CompleteUploadUseCase,
     CopyEntryUseCase,
     CreateFolderUseCase,
     GetFileDetailsUseCase,
+    GetUploadStatusUseCase,
     ListFolderEntriesUseCase,
     MoveEntryUseCase,
     PermanentlyDeleteUseCase,
     RenameEntryUseCase,
     RestoreEntryUseCase,
+    StartUploadUseCase,
     TrashEntryUseCase,
 )
 from app.presentation.auth import require_principal
@@ -52,8 +63,11 @@ from app.presentation.schemas.storage import (
     PermanentDeleteData,
     RenameEntryInput,
     RestoreTrashInput,
+    StartUploadInput,
     StorageEntryData,
     TrashItemData,
+    UploadChunkData,
+    UploadSessionData,
 )
 
 _AUTH_SECURITY: list[dict[str, list[str]]] = [
@@ -80,6 +94,11 @@ class StorageRouteUseCases:
     trash_entry: TrashEntryUseCase
     restore_entry: RestoreEntryUseCase
     permanently_delete: PermanentlyDeleteUseCase
+    start_upload: StartUploadUseCase
+    get_upload_status: GetUploadStatusUseCase
+    append_upload_chunk: AppendUploadChunkUseCase
+    complete_upload: CompleteUploadUseCase
+    cancel_upload: CancelUploadUseCase
 
 
 def create_storage_router(
@@ -356,6 +375,147 @@ def create_storage_router(
             request_id=request.state.request_id,
         )
 
+    @router.post(
+        "/uploads",
+        response_model=ApiResponse[UploadSessionData],
+        status_code=status.HTTP_201_CREATED,
+        responses=_PROTECTED_RESPONSES,
+        summary="Start a resumable upload",
+        openapi_extra=_mutation_openapi(csrf_header_name),
+    )
+    async def start_upload(
+        payload: StartUploadInput,
+        request: Request,
+        response: Response,
+    ) -> ApiResponse[UploadSessionData]:
+        principal = require_principal(request)
+        result = await use_cases.start_upload.execute(
+            StartUploadCommandDTO(
+                owner_id=principal.admin_id,
+                parent_id=payload.parent_id,
+                filename=payload.filename,
+                expected_size=payload.size,
+                declared_mime_type=payload.mime_type,
+            )
+        )
+        response.headers["Location"] = str(
+            request.url_for("get_upload_status", upload_id=result.id)
+        )
+        response.headers["Upload-Offset"] = str(result.uploaded_bytes)
+        response.headers["Upload-Length"] = str(result.expected_size)
+        return success_response(
+            _upload_data(result),
+            request_id=request.state.request_id,
+        )
+
+    @router.head(
+        "/uploads/{upload_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses=_PROTECTED_RESPONSES,
+        summary="Get resumable upload offset",
+        openapi_extra={"security": _AUTH_SECURITY},
+    )
+    async def get_upload_status(upload_id: UUID, request: Request) -> Response:
+        principal = require_principal(request)
+        result = await use_cases.get_upload_status.execute(
+            owner_id=principal.admin_id,
+            upload_id=upload_id,
+        )
+        return Response(
+            status_code=status.HTTP_204_NO_CONTENT,
+            headers={
+                "Upload-Offset": str(result.uploaded_bytes),
+                "Upload-Length": str(result.expected_size),
+                "Upload-Status": result.status,
+                "Upload-Expires": result.expires_at.isoformat(),
+            },
+        )
+
+    @router.patch(
+        "/uploads/{upload_id}",
+        response_model=ApiResponse[UploadChunkData],
+        responses={
+            **_PROTECTED_RESPONSES,
+            415: {
+                "model": ErrorResponse,
+                "description": "Unsupported chunk media type.",
+            },
+        },
+        summary="Append a streamed upload chunk",
+        description=(
+            "Streams application/offset+octet-stream at the exact Upload-Offset."
+        ),
+        openapi_extra=_chunk_openapi(csrf_header_name),
+    )
+    async def append_upload_chunk(
+        upload_id: UUID,
+        request: Request,
+        response: Response,
+        upload_offset: Annotated[int, Header(alias="Upload-Offset", ge=0)],
+    ) -> ApiResponse[UploadChunkData]:
+        if request.headers.get("content-type", "").partition(";")[0].casefold() != (
+            "application/offset+octet-stream"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Content-Type must be application/offset+octet-stream.",
+            )
+        principal = require_principal(request)
+        result = await use_cases.append_upload_chunk.execute(
+            AppendUploadChunkCommandDTO(
+                owner_id=principal.admin_id,
+                upload_id=upload_id,
+                offset=upload_offset,
+                chunks=request.stream(),
+            )
+        )
+        response.headers["Upload-Offset"] = str(result.offset)
+        return success_response(
+            _upload_chunk_data(result),
+            request_id=request.state.request_id,
+        )
+
+    @router.post(
+        "/uploads/{upload_id}/complete",
+        response_model=ApiResponse[StorageEntryData],
+        status_code=status.HTTP_201_CREATED,
+        responses=_PROTECTED_RESPONSES,
+        summary="Verify and atomically publish an upload",
+        openapi_extra=_mutation_openapi(csrf_header_name),
+    )
+    async def complete_upload(
+        upload_id: UUID,
+        request: Request,
+    ) -> ApiResponse[StorageEntryData]:
+        principal = require_principal(request)
+        result = await use_cases.complete_upload.execute(
+            CompleteUploadCommandDTO(principal.admin_id, upload_id)
+        )
+        return success_response(
+            _entry_data(result),
+            request_id=request.state.request_id,
+        )
+
+    @router.delete(
+        "/uploads/{upload_id}",
+        response_model=ApiResponse[UploadSessionData],
+        responses=_PROTECTED_RESPONSES,
+        summary="Cancel an upload and remove staging data",
+        openapi_extra=_mutation_openapi(csrf_header_name),
+    )
+    async def cancel_upload(
+        upload_id: UUID,
+        request: Request,
+    ) -> ApiResponse[UploadSessionData]:
+        principal = require_principal(request)
+        result = await use_cases.cancel_upload.execute(
+            CancelUploadCommandDTO(principal.admin_id, upload_id)
+        )
+        return success_response(
+            _upload_data(result),
+            request_id=request.state.request_id,
+        )
+
     return router
 
 
@@ -400,6 +560,30 @@ def _trash_data(value: TrashItemDTO) -> TrashItemData:
     )
 
 
+def _upload_data(value: UploadSessionDTO) -> UploadSessionData:
+    return UploadSessionData(
+        id=value.id,
+        parent_id=value.parent_id,
+        filename=value.filename,
+        expected_size=value.expected_size,
+        uploaded_bytes=value.uploaded_bytes,
+        declared_mime_type=value.declared_mime_type,
+        extension=value.extension,
+        status=value.status,
+        expires_at=value.expires_at,
+        checksum_sha256=value.checksum_sha256,
+    )
+
+
+def _upload_chunk_data(value: UploadChunkResultDTO) -> UploadChunkData:
+    return UploadChunkData(
+        upload_id=value.upload_id,
+        offset=value.offset,
+        received_bytes=value.received_bytes,
+        chunk_sha256=value.chunk_sha256,
+    )
+
+
 def _mutation_openapi(csrf_header_name: str) -> dict[str, Any]:
     return {
         "security": _AUTH_SECURITY,
@@ -415,3 +599,16 @@ def _mutation_openapi(csrf_header_name: str) -> dict[str, Any]:
             }
         ],
     }
+
+
+def _chunk_openapi(csrf_header_name: str) -> dict[str, Any]:
+    contract = _mutation_openapi(csrf_header_name)
+    contract["requestBody"] = {
+        "required": True,
+        "content": {
+            "application/offset+octet-stream": {
+                "schema": {"type": "string", "format": "binary"}
+            }
+        },
+    }
+    return contract

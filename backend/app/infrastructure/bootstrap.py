@@ -84,6 +84,11 @@ def create_application(
         trash_entry=active_container.trash_entry,
         restore_entry=active_container.restore_entry,
         permanently_delete=active_container.permanently_delete,
+        start_upload=active_container.start_upload,
+        get_upload_status=active_container.get_upload_status,
+        append_upload_chunk=active_container.append_upload_chunk,
+        complete_upload=active_container.complete_upload,
+        cancel_upload=active_container.cancel_upload,
     )
     app.add_middleware(
         AuthenticationMiddleware,

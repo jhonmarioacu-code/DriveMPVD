@@ -214,3 +214,45 @@ class TrashItemData(StorageModel):
 
 class PermanentDeleteData(StorageModel):
     deleted_entries: int = Field(ge=1)
+
+
+class StartUploadInput(StorageModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "parent_id": "019f7769-b2c8-7000-8000-000000000001",
+                    "filename": "report.pdf",
+                    "size": 1048576,
+                    "mime_type": "application/pdf",
+                }
+            ]
+        },
+    )
+
+    parent_id: UUID
+    filename: EntryName
+    size: int = Field(ge=0)
+    mime_type: str = Field(min_length=3, max_length=255)
+
+
+class UploadSessionData(StorageModel):
+    id: UUID
+    parent_id: UUID
+    filename: str
+    expected_size: int
+    uploaded_bytes: int
+    declared_mime_type: str | None
+    extension: str
+    status: str
+    expires_at: datetime
+    checksum_sha256: str | None
+
+
+class UploadChunkData(StorageModel):
+    upload_id: UUID
+    offset: int
+    received_bytes: int
+    chunk_sha256: str

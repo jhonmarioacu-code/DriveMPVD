@@ -1,3 +1,4 @@
+import hashlib
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,18 +27,23 @@ class StorageApiContext:
     root_id: UUID
     file_id: UUID
     headers: dict[str, str]
+    storage_root: Path
 
 
 @pytest.fixture
 async def storage_api_context(
     migrated_database_url: str,
     clean_storage: None,
+    tmp_path: Path,
 ) -> AsyncIterator[StorageApiContext]:
     del clean_storage
     settings = Settings(
         environment=AppEnvironment.TEST,
         database_url=migrated_database_url,
-        storage_root=Path.cwd().anchor,
+        storage_root=tmp_path / "storage",
+        max_upload_size_bytes=8 * 1024 * 1024,
+        max_upload_chunk_size_bytes=2 * 1024 * 1024,
+        upload_allowed_extensions=("pdf", "txt", "png"),
         database_pool_size=2,
         database_max_overflow=0,
         argon2_time_cost=1,
@@ -75,6 +81,7 @@ async def storage_api_context(
             root_id=root_id,
             file_id=file_id,
             headers={"Authorization": f"Bearer {token}"},
+            storage_root=settings.storage_root,
         )
     await container.database.dispose()
 
@@ -184,6 +191,9 @@ async def test_storage_routes_require_auth_and_publish_openapi_contract(
         "/api/v1/storage/entries/{entry_id}/trash",
         "/api/v1/storage/trash/{trash_item_id}/restore",
         "/api/v1/storage/trash/{trash_item_id}",
+        "/api/v1/storage/uploads",
+        "/api/v1/storage/uploads/{upload_id}",
+        "/api/v1/storage/uploads/{upload_id}/complete",
     }
     assert expected <= paths.keys()
     operation = paths["/api/v1/storage/folders"]["post"]
@@ -192,6 +202,10 @@ async def test_storage_routes_require_auth_and_publish_openapi_contract(
     schemas = schema["components"]["schemas"]
     assert schemas["CreateFolderInput"]["examples"]
     assert schemas["FileDetailsData"]["examples"]
+    chunk_operation = paths["/api/v1/storage/uploads/{upload_id}"]["patch"]
+    assert (
+        "application/offset+octet-stream" in chunk_operation["requestBody"]["content"]
+    )
 
 
 async def test_list_endpoint_paginates_sorts_filters_and_revalidates_cache(
@@ -398,3 +412,248 @@ async def test_cookie_authenticated_mutations_require_csrf(
         json={"parent_id": str(context.root_id), "name": "Cookie folder"},
     )
     assert accepted.status_code == 201
+
+
+async def test_small_upload_resumes_hashes_and_publishes_atomically(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    content = b"%PDF-1.7\nstreamed document\n%%EOF"
+    started = await context.client.post(
+        "/api/v1/storage/uploads",
+        headers=context.headers,
+        json={
+            "parent_id": str(context.root_id),
+            "filename": "uploaded.pdf",
+            "size": len(content),
+            "mime_type": "application/pdf",
+        },
+    )
+    assert started.status_code == 201
+    upload_id = started.json()["data"]["id"]
+
+    first = await context.client.patch(
+        f"/api/v1/storage/uploads/{upload_id}",
+        headers={
+            **context.headers,
+            "Upload-Offset": "0",
+            "Content-Type": "application/offset+octet-stream",
+        },
+        content=content[:12],
+    )
+    assert first.status_code == 200
+    assert first.headers["Upload-Offset"] == "12"
+    status_response = await context.client.head(
+        f"/api/v1/storage/uploads/{upload_id}", headers=context.headers
+    )
+    assert status_response.status_code == 204
+    assert status_response.headers["Upload-Offset"] == "12"
+
+    wrong_offset = await context.client.patch(
+        f"/api/v1/storage/uploads/{upload_id}",
+        headers={
+            **context.headers,
+            "Upload-Offset": "0",
+            "Content-Type": "application/offset+octet-stream",
+        },
+        content=b"wrong",
+    )
+    assert wrong_offset.status_code == 409
+    assert wrong_offset.headers["Upload-Offset"] == "12"
+    resumed = await context.client.patch(
+        f"/api/v1/storage/uploads/{upload_id}",
+        headers={
+            **context.headers,
+            "Upload-Offset": "12",
+            "Content-Type": "application/offset+octet-stream",
+        },
+        content=content[12:],
+    )
+    assert resumed.headers["Upload-Offset"] == str(len(content))
+
+    completed = await context.client.post(
+        f"/api/v1/storage/uploads/{upload_id}/complete",
+        headers=context.headers,
+    )
+    assert completed.status_code == 201
+    data = completed.json()["data"]
+    assert data["size"] == len(content)
+    assert data["mime_type"] == "application/pdf"
+    assert data["checksum_sha256"] == hashlib.sha256(content).hexdigest()
+    assert not list((context.storage_root / "staging").glob("*.part"))
+    stored_objects = [
+        path for path in (context.storage_root / "objects").rglob("*") if path.is_file()
+    ]
+    assert len(stored_objects) == 1
+    assert stored_objects[0].read_bytes() == content
+
+
+async def test_large_upload_uses_multiple_bounded_chunks(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    mebibyte = 1024 * 1024
+    total_size = 5 * mebibyte
+    started = await context.client.post(
+        "/api/v1/storage/uploads",
+        headers=context.headers,
+        json={
+            "parent_id": str(context.root_id),
+            "filename": "large.txt",
+            "size": total_size,
+            "mime_type": "text/plain",
+        },
+    )
+    upload_id = started.json()["data"]["id"]
+    hasher = hashlib.sha256()
+    offset = 0
+    for _ in range(5):
+        response = await context.client.patch(
+            f"/api/v1/storage/uploads/{upload_id}",
+            headers={
+                **context.headers,
+                "Upload-Offset": str(offset),
+                "Content-Type": "application/offset+octet-stream",
+            },
+            content=_repeated_content(b"x" * 64 * 1024, 16),
+        )
+        assert response.status_code == 200
+        offset += mebibyte
+        hasher.update(b"x" * mebibyte)
+        assert response.json()["data"]["offset"] == offset
+
+    completed = await context.client.post(
+        f"/api/v1/storage/uploads/{upload_id}/complete",
+        headers=context.headers,
+    )
+    assert completed.status_code == 201
+    assert completed.json()["data"]["size"] == total_size
+    assert completed.json()["data"]["checksum_sha256"] == hasher.hexdigest()
+
+
+async def test_cancelled_and_invalid_uploads_leave_no_staging_files(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    blocked = await context.client.post(
+        "/api/v1/storage/uploads",
+        headers=context.headers,
+        json={
+            "parent_id": str(context.root_id),
+            "filename": "malware.exe",
+            "size": 10,
+            "mime_type": "application/octet-stream",
+        },
+    )
+    assert blocked.status_code == 422
+    too_large = await context.client.post(
+        "/api/v1/storage/uploads",
+        headers=context.headers,
+        json={
+            "parent_id": str(context.root_id),
+            "filename": "large.txt",
+            "size": 9 * 1024 * 1024,
+            "mime_type": "text/plain",
+        },
+    )
+    assert too_large.status_code == 422
+    not_allowed = await context.client.post(
+        "/api/v1/storage/uploads",
+        headers=context.headers,
+        json={
+            "parent_id": str(context.root_id),
+            "filename": "photo.jpg",
+            "size": 10,
+            "mime_type": "image/jpeg",
+        },
+    )
+    assert not_allowed.status_code == 422
+
+    started = await context.client.post(
+        "/api/v1/storage/uploads",
+        headers=context.headers,
+        json={
+            "parent_id": str(context.root_id),
+            "filename": "cancel.txt",
+            "size": 100,
+            "mime_type": "text/plain",
+        },
+    )
+    upload_id = started.json()["data"]["id"]
+    appended = await context.client.patch(
+        f"/api/v1/storage/uploads/{upload_id}",
+        headers={
+            **context.headers,
+            "Upload-Offset": "0",
+            "Content-Type": "application/offset+octet-stream",
+        },
+        content=b"partial",
+    )
+    assert appended.status_code == 200
+    cancelled = await context.client.delete(
+        f"/api/v1/storage/uploads/{upload_id}", headers=context.headers
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["data"]["status"] == "cancelled"
+    assert not list((context.storage_root / "staging").glob("*.part"))
+
+
+async def test_upload_rejects_oversized_chunks_incomplete_and_mime_mismatch(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    started = await context.client.post(
+        "/api/v1/storage/uploads",
+        headers=context.headers,
+        json={
+            "parent_id": str(context.root_id),
+            "filename": "fake.png",
+            "size": 8,
+            "mime_type": "image/png",
+        },
+    )
+    upload_id = started.json()["data"]["id"]
+    incomplete = await context.client.post(
+        f"/api/v1/storage/uploads/{upload_id}/complete",
+        headers=context.headers,
+    )
+    assert incomplete.status_code == 409
+    oversized = await context.client.patch(
+        f"/api/v1/storage/uploads/{upload_id}",
+        headers={
+            **context.headers,
+            "Upload-Offset": "0",
+            "Content-Type": "application/offset+octet-stream",
+        },
+        content=b"%PDF-1.70",
+    )
+    assert oversized.status_code == 422
+    status_response = await context.client.head(
+        f"/api/v1/storage/uploads/{upload_id}", headers=context.headers
+    )
+    assert status_response.headers["Upload-Offset"] == "0"
+    appended = await context.client.patch(
+        f"/api/v1/storage/uploads/{upload_id}",
+        headers={
+            **context.headers,
+            "Upload-Offset": "0",
+            "Content-Type": "application/offset+octet-stream",
+        },
+        content=b"%PDF-1.7",
+    )
+    assert appended.status_code == 200
+    mismatch = await context.client.post(
+        f"/api/v1/storage/uploads/{upload_id}/complete",
+        headers=context.headers,
+    )
+    assert mismatch.status_code == 422
+    assert list((context.storage_root / "staging").glob("*.part"))
+    await context.client.delete(
+        f"/api/v1/storage/uploads/{upload_id}", headers=context.headers
+    )
+    assert not list((context.storage_root / "staging").glob("*.part"))
+
+
+async def _repeated_content(block: bytes, repetitions: int) -> AsyncIterator[bytes]:
+    for _ in range(repetitions):
+        yield block
