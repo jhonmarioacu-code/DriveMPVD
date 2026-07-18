@@ -13,7 +13,7 @@ incompletas.
 | Fase | Alcance | Estado |
 |---|---|---|
 | 1 | Arquitectura, límites, contratos y estructura | Terminada |
-| 2 | Backend, autenticación y almacenamiento | En curso — incremento 2.5 |
+| 2 | Backend, autenticación, almacenamiento y subidas | En curso — incremento 2.6 |
 | 3 | Frontend base | Pendiente |
 | 4 | Autenticación y endurecimiento | Pendiente |
 | 5 | Explorador de archivos | Pendiente |

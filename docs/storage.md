@@ -23,15 +23,13 @@ en disco.
 ## Garantías del adaptador
 
 La aplicación declara el puerto `FileStorageProvider`. Los casos de uso solo
-conocen ese contrato; `LocalFileStorageProvider` será el primer adaptador. S3 o
+conocen ese contrato; `LocalFileStorageProvider` es el primer adaptador. S3 o
 MinIO podrán añadirse seleccionando otro adaptador en el composition root, sin
 modificar dominio ni aplicación. El contrato trabaja con iteradores asíncronos
 de bytes, rangos y handles opacos; nunca recibe rutas del sistema.
 
-- Abre archivos usando una raíz preabierta o una ruta resuelta y confinada.
-- Rechaza symlinks y tipos especiales.
+- Resuelve claves opacas y verifica que permanezcan bajo la raíz configurada.
 - Escribe staging y objeto final en el mismo filesystem para renombrado atómico.
-- Aplica permisos mínimos y `umask` restrictiva.
 - Nunca sobrescribe un blob existente; las claves son inmutables.
 - Separa publicación, eliminación y reconciliación con operaciones idempotentes.
 - Ningún método acepta o devuelve el archivo completo como `bytes`; todos los
@@ -39,10 +37,11 @@ de bytes, rangos y handles opacos; nunca recibe rutas del sistema.
 
 ## Subidas grandes
 
-El navegador divide archivos en bloques configurables y conserva la sesión
-para reanudar. El servidor escribe secuencialmente en staging y confirma el
-offset después de que los bytes sean persistentes. No ensambla chunks en RAM ni
-duplica un archivo de 50 GB al finalizar.
+El cliente divide archivos en bloques configurables y conserva la sesión para
+reanudar. El servidor escribe secuencialmente en staging, ejecuta `fsync` y
+confirma el offset después de persistir bytes y metadatos. No ensambla chunks
+en RAM. Al finalizar recorre staging por streaming para SHA-256 y MIME, y mueve
+el archivo con `os.replace`.
 
 Nginx usará `proxy_request_buffering off` solo en la ruta de chunks, con timeout
 y límites apropiados. La API leerá el body como stream con backpressure. Las

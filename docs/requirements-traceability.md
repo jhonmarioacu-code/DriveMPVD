@@ -10,8 +10,8 @@ en la Fase 1.
 | Crear, renombrar, mover, copiar y borrar | Entidades, commands, UoW y REST | 2.5 API implementada |
 | Carpetas y subcarpetas | Adyacencia, CTE y listado keyset | 2.5 API implementada |
 | Lista, cuadrícula, breadcrumb y menú | App shell/features virtualizadas | 3 y 5 |
-| Subir archivos/carpetas y drag-and-drop | Sesiones reanudables y rutas segmentadas | 6 |
-| Archivos de hasta 50 GB | Streaming a staging, offset y rename atómico | 6 |
+| Subir archivos/carpetas y drag-and-drop | API reanudable; carpetas/UI futuras | 2.6 subida de archivo implementada |
+| Archivos de hasta 50 GB | Streaming, offsets, SHA-256 y publicación atómica | 2.6 implementado |
 | Descargar/abrir | Autorización + entrega interna Nginx | 5 y 8 |
 | Imágenes con zoom/rotación/fullscreen | Feature `previews` | 7 |
 | Video y música | HTML5, Range y playlist acotada | 7 y 8 |
@@ -42,7 +42,7 @@ en la Fase 1.
 | Errores globales | Jerarquías por capa y traducción HTTP única | 2 |
 | Respuesta uniforme | Envelope `data/error/meta` | 2 |
 | API docs automáticas | FastAPI OpenAPI como fuente única | 2 |
-| Storage intercambiable | Puerto `FileStorageProvider` streaming | 2.4 contrato implementado; adaptador en 6 |
+| Storage intercambiable | Puerto streaming y adaptador local | 2.6 local implementado; S3/MinIO futuro |
 | PostgreSQL Full Text futuro | Puerto de búsqueda y evolución `tsvector`/GIN | 5 y 9 |
 | Versiones mínimas | Python 3.13, PostgreSQL 16, React 19, TypeScript 5.x | 2 y 3 |
 | Sin librerías experimentales | Solo releases estables y mantenidas | Transversal |

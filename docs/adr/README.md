@@ -13,3 +13,4 @@ reemplaza conservando el historial.
 - [ADR-0008: Sesiones JWT rotatorias del administrador](0008-admin-jwt-sessions.md)
 - [ADR-0009: Adyacencia y objetos inmutables](0009-storage-adjacency-and-immutable-objects.md)
 - [ADR-0010: Read model HTTP y paginación keyset](0010-storage-http-read-model-and-keyset.md)
+- [ADR-0011: Staging reanudable y publicación atómica](0011-resumable-staging-and-atomic-publish.md)

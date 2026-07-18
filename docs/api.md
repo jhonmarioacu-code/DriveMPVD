@@ -33,13 +33,13 @@ y `request_id`.
 | Carpetas | `POST /storage/folders` |
 | Mutaciones | `PATCH /storage/entries/{id}`, `POST /storage/entries/{id}/move`, `POST /storage/entries/{id}/copy`, `POST /storage/entries/{id}/trash` |
 | Papelera | `POST /storage/trash/{id}/restore`, `DELETE /storage/trash/{id}` |
+| Subidas | `POST /storage/uploads`, `HEAD/PATCH/DELETE /storage/uploads/{id}`, `POST /storage/uploads/{id}/complete` |
 
 ## Recursos previstos
 
 | Área | Rutas principales |
 |---|---|
 | Descarga | `GET /entries/{id}/content` |
-| Subidas | `POST /uploads`, `HEAD /uploads/{id}`, `PATCH /uploads/{id}`, `POST /uploads/{id}/complete`, `DELETE /uploads/{id}` |
 | Búsqueda | `GET /search` |
 | Actividad | `GET /recents`, `PUT /favorites/{id}`, `DELETE /favorites/{id}`, `GET /favorites` |
 | Papelera | `GET /trash`, `DELETE /trash` |
@@ -66,10 +66,12 @@ paginan incluso sin filtros.
 
 ## Subida reanudable
 
-1. `POST /uploads` crea sesión con longitud y metadatos del destino.
-2. `HEAD /uploads/{id}` devuelve `Upload-Offset` y `Upload-Length`.
-3. `PATCH /uploads/{id}` envía bytes desde el offset exacto; Nginx no bufferiza.
-4. `POST /uploads/{id}/complete` valida tamaño, detecta tipo y publica el blob.
+1. `POST /storage/uploads` crea sesión con longitud y metadatos del destino.
+2. `HEAD /storage/uploads/{id}` devuelve `Upload-Offset` y `Upload-Length`.
+3. `PATCH /storage/uploads/{id}` envía bytes desde el offset exacto.
+4. `POST /storage/uploads/{id}/complete` valida tamaño, MIME y SHA-256, y
+   publica el objeto atómicamente.
+5. `DELETE /storage/uploads/{id}` cancela y elimina staging.
 
 La subida de carpeta se expresa enviando rutas relativas normalizadas como
 metadato por archivo; el servidor crea carpetas de forma idempotente. Cada
