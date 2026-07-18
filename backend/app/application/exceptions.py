@@ -33,3 +33,10 @@ class ApplicationValidationError(ApplicationError):
 
     code = "application.validation_error"
     default_message = "The operation contains invalid values."
+
+
+class DependencyUnavailableError(ApplicationError):
+    """A required external dependency cannot serve the use case."""
+
+    code = "application.dependency_unavailable"
+    default_message = "A required service is temporarily unavailable."

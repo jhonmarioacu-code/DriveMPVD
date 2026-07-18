@@ -12,6 +12,7 @@ from app.application.exceptions import (
     ApplicationError,
     ApplicationValidationError,
     ConflictError,
+    DependencyUnavailableError,
     ResourceNotFoundError,
 )
 from app.domain.exceptions import DomainError
@@ -73,6 +74,8 @@ async def handle_application_error(
         status_code = status.HTTP_409_CONFLICT
     elif isinstance(exc, ApplicationValidationError):
         status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    elif isinstance(exc, DependencyUnavailableError):
+        status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return _json_error(
         request,
         status_code=status_code,

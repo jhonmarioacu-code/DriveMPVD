@@ -78,9 +78,10 @@ addopts = [
   "--cov=app",
   "--cov-branch",
   "--cov-report=term-missing",
-  "--cov-fail-under=80",
+  "--cov-fail-under=90",
 ]
 asyncio_mode = "auto"
+markers = ["postgresql: requires a real PostgreSQL 16 instance"]
 testpaths = ["tests"]
 
 [tool.coverage.run]
@@ -94,5 +95,5 @@ exclude_also = [
   "raise NotImplementedError",
   '\.\.\.',
 ]
-fail_under = 80
+fail_under = 90
 show_missing = true

@@ -13,3 +13,12 @@ class HealthData(BaseModel):
     status: Literal["ok"]
     service: str
     version: str
+
+
+class ReadinessData(BaseModel):
+    """Public dependency readiness payload generated into OpenAPI."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    status: Literal["ready"]
+    database: Literal["available"]

@@ -12,3 +12,17 @@ class InfrastructureError(Exception):
     def __init__(self, message: str | None = None) -> None:
         self.public_message = message or self.default_message
         super().__init__(self.public_message)
+
+
+class PersistenceError(InfrastructureError):
+    """Database operation failed without exposing driver details."""
+
+    code = "infrastructure.persistence_error"
+    default_message = "The database operation could not be completed."
+
+
+class UnitOfWorkStateError(InfrastructureError):
+    """Unit of Work was used outside its valid lifecycle."""
+
+    code = "infrastructure.unit_of_work_state"
+    default_message = "The transaction is not in a valid state."

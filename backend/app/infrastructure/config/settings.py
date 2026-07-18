@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     database_url: PostgresDsn = PostgresDsn(
         "postgresql+asyncpg://drivempvd:replace-me@localhost:5432/drivempvd"
     )
+    database_pool_size: int = Field(default=10, ge=1, le=50)
+    database_max_overflow: int = Field(default=10, ge=0, le=50)
+    database_pool_timeout_seconds: int = Field(default=30, ge=1, le=300)
+    database_statement_timeout_ms: int = Field(default=30_000, ge=1_000, le=300_000)
+    database_echo: bool = False
     storage_root: Path = Path("/data/storage")
     max_upload_size_bytes: int = Field(
         default=50 * 1024 * 1024 * 1024,

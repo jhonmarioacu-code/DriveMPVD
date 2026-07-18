@@ -1,5 +1,8 @@
 """FastAPI application assembly performed by infrastructure."""
 
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.infrastructure.config import Settings, load_settings
@@ -10,6 +13,17 @@ from app.presentation.api.router import create_api_router
 from app.presentation.errors.handlers import register_exception_handlers
 from app.presentation.middleware.request_context import RequestContextMiddleware
 from app.presentation.schemas.envelope import ErrorResponse
+
+
+def _lifespan(
+    container: ApplicationContainer,
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        await container.database.dispose()
+
+    return lifespan
 
 
 def create_application(settings: Settings | None = None) -> FastAPI:
@@ -27,6 +41,7 @@ def create_application(settings: Settings | None = None) -> FastAPI:
         docs_url=docs_url,
         redoc_url=redoc_url,
         openapi_url=openapi_url,
+        lifespan=_lifespan(container),
         responses={
             422: {"model": ErrorResponse},
             500: {"model": ErrorResponse},
@@ -39,7 +54,7 @@ def create_application(settings: Settings | None = None) -> FastAPI:
         infrastructure_error_type=InfrastructureError,
     )
     app.include_router(
-        create_api_router(container.get_health),
+        create_api_router(container.get_health, container.get_readiness),
         prefix=active_settings.api_prefix,
     )
     return app

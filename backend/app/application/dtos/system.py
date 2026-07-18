@@ -11,3 +11,11 @@ class HealthStatusDTO:
     status: Literal["ok"]
     service: str
     version: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReadinessStatusDTO:
+    """Readiness result after checking required infrastructure."""
+
+    status: Literal["ready"]
+    database: Literal["available"]
