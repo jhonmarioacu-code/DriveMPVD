@@ -3,6 +3,9 @@
 from app.infrastructure.persistence.repositories.outbox import (
     SQLAlchemyOutboxRepository,
 )
+from app.infrastructure.persistence.repositories.storage import (
+    SQLAlchemyStorageRepository,
+)
 
 __all__ = [
     "PostgreSQLRateLimiter",
@@ -10,6 +13,7 @@ __all__ = [
     "SQLAlchemyAuthSessionRepository",
     "SQLAlchemyOutboxRepository",
     "SQLAlchemySecurityEventRepository",
+    "SQLAlchemyStorageRepository",
 ]
 from app.infrastructure.persistence.repositories.auth import (
     PostgreSQLRateLimiter,

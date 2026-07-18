@@ -37,6 +37,7 @@ async def test_unit_of_work_commits_and_closes_one_transaction() -> None:
 
     async with unit_of_work:
         assert unit_of_work.outbox is not None
+        assert unit_of_work.storage is not None
         await unit_of_work.commit()
 
     session.begin.assert_awaited_once()

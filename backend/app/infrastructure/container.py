@@ -12,6 +12,15 @@ from app.application.use_cases.auth import (
     RefreshSessionUseCase,
     RevokeAllSessionsUseCase,
 )
+from app.application.use_cases.storage import (
+    CopyEntryUseCase,
+    CreateFolderUseCase,
+    MoveEntryUseCase,
+    PermanentlyDeleteUseCase,
+    RenameEntryUseCase,
+    RestoreEntryUseCase,
+    TrashEntryUseCase,
+)
 from app.application.use_cases.system import GetHealthUseCase, GetReadinessUseCase
 from app.infrastructure.config import Settings
 from app.infrastructure.persistence import Database, SQLAlchemyUnitOfWorkFactory
@@ -40,6 +49,13 @@ class ApplicationContainer:
     refresh_session: RefreshSessionUseCase
     logout: LogoutUseCase
     revoke_all_sessions: RevokeAllSessionsUseCase
+    create_folder: CreateFolderUseCase
+    rename_entry: RenameEntryUseCase
+    move_entry: MoveEntryUseCase
+    copy_entry: CopyEntryUseCase
+    trash_entry: TrashEntryUseCase
+    restore_entry: RestoreEntryUseCase
+    permanently_delete: PermanentlyDeleteUseCase
 
     @classmethod
     def build(cls, settings: Settings) -> "ApplicationContainer":
@@ -125,6 +141,41 @@ class ApplicationContainer:
                 unit_of_work_factory=unit_of_work_factory,
                 id_generator=id_generator,
                 secrets=secrets,
+                clock=clock,
+            ),
+            create_folder=CreateFolderUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                id_generator=id_generator,
+                clock=clock,
+            ),
+            rename_entry=RenameEntryUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                id_generator=id_generator,
+                clock=clock,
+            ),
+            move_entry=MoveEntryUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                id_generator=id_generator,
+                clock=clock,
+            ),
+            copy_entry=CopyEntryUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                id_generator=id_generator,
+                clock=clock,
+            ),
+            trash_entry=TrashEntryUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                id_generator=id_generator,
+                clock=clock,
+            ),
+            restore_entry=RestoreEntryUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                id_generator=id_generator,
+                clock=clock,
+            ),
+            permanently_delete=PermanentlyDeleteUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                id_generator=id_generator,
                 clock=clock,
             ),
         )

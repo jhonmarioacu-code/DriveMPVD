@@ -92,3 +92,17 @@ class SessionRevokedError(AuthenticationError):
 
     code = "auth.session_revoked"
     default_message = "The authentication session is no longer valid."
+
+
+class StorageEntryNotFoundError(ResourceNotFoundError):
+    """Logical storage entry is absent, deleted or owned by another account."""
+
+    code = "storage.entry_not_found"
+    default_message = "The storage entry was not found."
+
+
+class StorageNameConflictError(ConflictError):
+    """An active sibling already owns the normalized name."""
+
+    code = "storage.name_conflict"
+    default_message = "An entry with that name already exists in the destination."

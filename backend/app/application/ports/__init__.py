@@ -15,7 +15,14 @@ from app.application.ports.auth_services import (
 from app.application.ports.database_health import DatabaseHealthProvider
 from app.application.ports.file_storage import FileStorageProvider
 from app.application.ports.identifiers import IdGenerator
+from app.application.ports.media_processing import (
+    MetadataExtractor,
+    PreviewGenerator,
+    ThumbnailGenerator,
+    VirusScanner,
+)
 from app.application.ports.outbox_repository import OutboxRepository
+from app.application.ports.storage_repository import StorageRepository
 from app.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 __all__ = [
@@ -26,11 +33,16 @@ __all__ = [
     "FileStorageProvider",
     "IdGenerator",
     "JwtProvider",
+    "MetadataExtractor",
     "OutboxRepository",
     "PasswordHasher",
+    "PreviewGenerator",
     "RateLimiter",
     "SecretTokenProvider",
     "SecurityEventRepository",
+    "StorageRepository",
+    "ThumbnailGenerator",
     "UnitOfWork",
     "UnitOfWorkFactory",
+    "VirusScanner",
 ]

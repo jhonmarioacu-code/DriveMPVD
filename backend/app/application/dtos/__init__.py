@@ -21,6 +21,16 @@ from app.application.dtos.outbox import (
     OutboxMessageDTO,
     OutboxPageDTO,
 )
+from app.application.dtos.storage import (
+    CopyEntryCommandDTO,
+    CreateFolderCommandDTO,
+    MoveEntryCommandDTO,
+    PermanentlyDeleteCommandDTO,
+    RenameEntryCommandDTO,
+    RestoreEntryCommandDTO,
+    StorageTreeNodeDTO,
+    TrashEntryCommandDTO,
+)
 from app.application.dtos.system import HealthStatusDTO, ReadinessStatusDTO
 
 __all__ = [
@@ -29,9 +39,12 @@ __all__ = [
     "AuthPolicyDTO",
     "AuthenticationResultDTO",
     "BootstrapAdminCommandDTO",
+    "CopyEntryCommandDTO",
+    "CreateFolderCommandDTO",
     "HealthStatusDTO",
     "IssuedTokenDTO",
     "LoginCommandDTO",
+    "MoveEntryCommandDTO",
     "NewOutboxMessageDTO",
     "OutboxCursorDTO",
     "OutboxFilterDTO",
@@ -40,8 +53,13 @@ __all__ = [
     "PageDTO",
     "PageRequestDTO",
     "PasswordVerificationDTO",
+    "PermanentlyDeleteCommandDTO",
     "RateLimitDecisionDTO",
     "ReadinessStatusDTO",
     "RefreshCommandDTO",
     "RefreshTokenClaimsDTO",
+    "RenameEntryCommandDTO",
+    "RestoreEntryCommandDTO",
+    "StorageTreeNodeDTO",
+    "TrashEntryCommandDTO",
 ]

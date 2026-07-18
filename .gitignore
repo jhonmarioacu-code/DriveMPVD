@@ -31,6 +31,6 @@ Thumbs.db
 
 # Runtime data must never enter the repository
 data/
-storage/
-uploads/
+/storage/
+/uploads/
 *.log

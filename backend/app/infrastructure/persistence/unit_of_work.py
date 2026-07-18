@@ -12,6 +12,7 @@ from app.application.ports.auth_repositories import (
 )
 from app.application.ports.identifiers import IdGenerator
 from app.application.ports.outbox_repository import OutboxRepository
+from app.application.ports.storage_repository import StorageRepository
 from app.infrastructure.exceptions import PersistenceError, UnitOfWorkStateError
 from app.infrastructure.persistence.repositories.auth import (
     SQLAlchemyAdminAccountRepository,
@@ -20,6 +21,9 @@ from app.infrastructure.persistence.repositories.auth import (
 )
 from app.infrastructure.persistence.repositories.outbox import (
     SQLAlchemyOutboxRepository,
+)
+from app.infrastructure.persistence.repositories.storage import (
+    SQLAlchemyStorageRepository,
 )
 
 
@@ -38,6 +42,7 @@ class SQLAlchemyUnitOfWork:
         self._admin_accounts: SQLAlchemyAdminAccountRepository | None = None
         self._auth_sessions: SQLAlchemyAuthSessionRepository | None = None
         self._security_events: SQLAlchemySecurityEventRepository | None = None
+        self._storage: SQLAlchemyStorageRepository | None = None
         self._completed = False
 
     @property
@@ -65,6 +70,12 @@ class SQLAlchemyUnitOfWork:
             raise UnitOfWorkStateError()
         return self._security_events
 
+    @property
+    def storage(self) -> StorageRepository:
+        if self._storage is None or self._completed:
+            raise UnitOfWorkStateError()
+        return self._storage
+
     async def __aenter__(self) -> "SQLAlchemyUnitOfWork":
         """Open a session and begin a transaction explicitly."""
         if self._session is not None:
@@ -83,6 +94,7 @@ class SQLAlchemyUnitOfWork:
         self._admin_accounts = SQLAlchemyAdminAccountRepository(self._session)
         self._auth_sessions = SQLAlchemyAuthSessionRepository(self._session)
         self._security_events = SQLAlchemySecurityEventRepository(self._session)
+        self._storage = SQLAlchemyStorageRepository(self._session)
         return self
 
     async def __aexit__(
@@ -104,6 +116,7 @@ class SQLAlchemyUnitOfWork:
             self._admin_accounts = None
             self._auth_sessions = None
             self._security_events = None
+            self._storage = None
             self._completed = True
 
     async def commit(self) -> None:

@@ -9,6 +9,7 @@ from app.application.ports.auth_repositories import (
     SecurityEventRepository,
 )
 from app.application.ports.outbox_repository import OutboxRepository
+from app.application.ports.storage_repository import StorageRepository
 
 
 class UnitOfWork(Protocol):
@@ -27,6 +28,9 @@ class UnitOfWork(Protocol):
 
     @property
     def security_events(self) -> SecurityEventRepository: ...
+
+    @property
+    def storage(self) -> StorageRepository: ...
 
     async def __aenter__(self) -> Self:
         """Open a transaction."""
