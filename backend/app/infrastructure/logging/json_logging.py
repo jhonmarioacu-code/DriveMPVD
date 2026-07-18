@@ -15,6 +15,11 @@ _EXTRA_FIELDS: Final[tuple[str, ...]] = (
     "status_code",
     "duration_ms",
     "error_code",
+    "operation",
+    "outcome",
+    "duration_seconds",
+    "size_bytes",
+    "average_bytes_per_second",
 )
 
 

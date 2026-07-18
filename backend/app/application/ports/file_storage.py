@@ -54,6 +54,22 @@ class FileStorageProvider(Protocol):
         """Atomically move a complete staging object into permanent storage."""
         ...
 
+    def stream_upload(self, upload_id: UUID) -> AsyncIterator[bytes]:
+        """Stream staged bytes for integrity and inspection passes."""
+        ...
+
+    async def upload_size(self, upload_id: UUID) -> int:
+        """Return the actual persisted staging length."""
+        ...
+
+    async def discard_upload(self, upload_id: UUID) -> None:
+        """Remove staging content idempotently."""
+        ...
+
+    async def truncate_upload(self, upload_id: UUID, *, offset: int) -> None:
+        """Compensate an append whose metadata transaction did not commit."""
+        ...
+
     def stream(
         self,
         key: StorageKey,

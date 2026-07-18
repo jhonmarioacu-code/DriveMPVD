@@ -26,3 +26,8 @@ class UnitOfWorkStateError(InfrastructureError):
 
     code = "infrastructure.unit_of_work_state"
     default_message = "The transaction is not in a valid state."
+
+
+class FileStorageError(InfrastructureError):
+    code = "infrastructure.file_storage_error"
+    default_message = "The file storage operation could not be completed."

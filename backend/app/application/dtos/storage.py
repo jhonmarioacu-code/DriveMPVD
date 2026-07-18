@@ -1,5 +1,6 @@
 """Storage command and read-model transfer objects."""
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -92,6 +93,68 @@ class ListFolderEntriesQueryDTO:
     sort_by: StorageSortField
     direction: SortDirection
     filters: StorageListFiltersDTO
+
+
+@dataclass(frozen=True, slots=True)
+class UploadPolicyDTO:
+    maximum_file_size: int
+    maximum_chunk_size: int
+    maximum_logical_path_length: int
+    session_ttl_seconds: int
+    allowed_extensions: frozenset[str]
+    blocked_extensions: frozenset[str]
+    allowed_mime_types: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class StartUploadCommandDTO:
+    owner_id: UUID
+    parent_id: UUID
+    filename: str
+    expected_size: int
+    declared_mime_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class AppendUploadChunkCommandDTO:
+    owner_id: UUID
+    upload_id: UUID
+    offset: int
+    chunks: AsyncIterator[bytes]
+
+
+@dataclass(frozen=True, slots=True)
+class CompleteUploadCommandDTO:
+    owner_id: UUID
+    upload_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class CancelUploadCommandDTO:
+    owner_id: UUID
+    upload_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class UploadSessionDTO:
+    id: UUID
+    parent_id: UUID
+    filename: str
+    expected_size: int
+    uploaded_bytes: int
+    declared_mime_type: str | None
+    extension: str
+    status: str
+    expires_at: datetime
+    checksum_sha256: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class UploadChunkResultDTO:
+    upload_id: UUID
+    offset: int
+    received_bytes: int
+    chunk_sha256: str
 
 
 @dataclass(frozen=True, slots=True)

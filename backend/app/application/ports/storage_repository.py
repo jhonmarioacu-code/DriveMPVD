@@ -19,6 +19,7 @@ from app.domain.storage.entities import (
     StorageEntry,
     StorageObject,
     TrashItem,
+    UploadSession,
 )
 
 
@@ -48,6 +49,8 @@ class StorageRepository(Protocol):
         include_deleted: bool = False,
         for_update: bool = False,
     ) -> Folder | None: ...
+
+    async def logical_path_length(self, folder_id: UUID) -> int: ...
 
     async def list_children(
         self,
@@ -105,3 +108,14 @@ class StorageRepository(Protocol):
     async def remove_trash_item(self, trash_item_id: UUID) -> None: ...
 
     async def hard_delete_subtree(self, root_id: UUID) -> int: ...
+
+    async def add_upload_session(self, session: UploadSession) -> None: ...
+
+    async def get_upload_session(
+        self,
+        upload_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> UploadSession | None: ...
+
+    async def save_upload_session(self, session: UploadSession) -> None: ...

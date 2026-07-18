@@ -26,8 +26,9 @@ from app.domain.storage.entities import (
     StorageEntry,
     StorageObject,
     TrashItem,
+    UploadSession,
 )
-from app.domain.storage.enums import EntryType, StorageObjectStatus
+from app.domain.storage.enums import EntryType, StorageObjectStatus, UploadStatus
 from app.infrastructure.exceptions import PersistenceError
 from app.infrastructure.persistence.models.storage import (
     FileMetadataModel,
@@ -35,6 +36,7 @@ from app.infrastructure.persistence.models.storage import (
     StorageEntryModel,
     StorageObjectModel,
     TrashItemModel,
+    UploadSessionModel,
 )
 
 
@@ -81,6 +83,31 @@ class SQLAlchemyStorageRepository:
             for_update=for_update,
         )
         return entry if isinstance(entry, Folder) else None
+
+    async def logical_path_length(self, folder_id: UUID) -> int:
+        ancestors = (
+            select(
+                StorageEntryModel.id,
+                StorageEntryModel.parent_id,
+                StorageEntryModel.name,
+            )
+            .where(StorageEntryModel.id == folder_id)
+            .cte("storage_ancestors", recursive=True)
+        )
+        parent = StorageEntryModel.__table__.alias("parent_entry")
+        ancestors = ancestors.union_all(
+            select(parent.c.id, parent.c.parent_id, parent.c.name).join(
+                ancestors,
+                parent.c.id == ancestors.c.parent_id,
+            )
+        )
+        try:
+            length = await self._session.scalar(
+                select(func.coalesce(func.sum(func.length(ancestors.c.name) + 1), 0))
+            )
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return int(length or 0)
 
     async def list_children(
         self,
@@ -389,6 +416,43 @@ class SQLAlchemyStorageRepository:
             raise PersistenceError() from exc
         return result.rowcount
 
+    async def add_upload_session(self, session: UploadSession) -> None:
+        self._session.add(self._upload_model(session))
+        await self._flush()
+
+    async def get_upload_session(
+        self,
+        upload_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> UploadSession | None:
+        statement = select(UploadSessionModel).where(UploadSessionModel.id == upload_id)
+        if for_update:
+            statement = statement.with_for_update()
+        try:
+            model = await self._session.scalar(statement)
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return None if model is None else self._to_upload(model)
+
+    async def save_upload_session(self, session: UploadSession) -> None:
+        statement = (
+            update(UploadSessionModel)
+            .where(UploadSessionModel.id == session.id)
+            .values(
+                uploaded_bytes=session.uploaded_bytes,
+                checksum_sha256=session.checksum_sha256,
+                status=session.status.value,
+                updated_at=session.updated_at,
+            )
+        )
+        try:
+            result = cast(CursorResult[Any], await self._session.execute(statement))
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        if result.rowcount != 1:
+            raise PersistenceError("The upload session no longer exists.")
+
     async def _update_subtree_deletion(
         self,
         root_id: UUID,
@@ -576,4 +640,45 @@ class SQLAlchemyStorageRepository:
             original_parent_id=model.original_parent_id,
             deleted_by=model.deleted_by,
             trashed_at=model.trashed_at,
+        )
+
+    @staticmethod
+    def _upload_model(session: UploadSession) -> UploadSessionModel:
+        return UploadSessionModel(
+            id=session.id,
+            owner_id=session.owner_id,
+            parent_id=session.parent_id,
+            original_name=session.original_name,
+            internal_name=session.internal_name,
+            expected_size=session.expected_size,
+            uploaded_bytes=session.uploaded_bytes,
+            mime_type=session.mime_type,
+            extension=session.extension,
+            checksum_sha256=session.checksum_sha256,
+            staging_key=session.staging_key,
+            status=session.status.value,
+            expires_at=session.expires_at,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+            deleted_at=None,
+        )
+
+    @staticmethod
+    def _to_upload(model: UploadSessionModel) -> UploadSession:
+        return UploadSession(
+            id=model.id,
+            owner_id=model.owner_id,
+            parent_id=model.parent_id,
+            original_name=model.original_name,
+            internal_name=model.internal_name,
+            expected_size=model.expected_size,
+            uploaded_bytes=model.uploaded_bytes,
+            mime_type=model.mime_type,
+            extension=model.extension,
+            checksum_sha256=model.checksum_sha256,
+            staging_key=model.staging_key,
+            status=UploadStatus(model.status),
+            expires_at=model.expires_at,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
         )

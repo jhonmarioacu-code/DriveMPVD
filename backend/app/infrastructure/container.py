@@ -3,7 +3,12 @@
 from dataclasses import dataclass
 
 from app.application.dtos.auth import AuthPolicyDTO
+from app.application.dtos.storage import UploadPolicyDTO
+from app.application.ports.auth_services import Clock
+from app.application.ports.file_storage import FileStorageProvider
+from app.application.ports.identifiers import IdGenerator
 from app.application.ports.unit_of_work import UnitOfWorkFactory
+from app.application.ports.upload_services import MimeDetector, UploadMetricsRecorder
 from app.application.use_cases.auth import (
     AuthenticateAccessUseCase,
     BootstrapAdminUseCase,
@@ -13,16 +18,22 @@ from app.application.use_cases.auth import (
     RevokeAllSessionsUseCase,
 )
 from app.application.use_cases.storage import (
+    AppendUploadChunkUseCase,
+    CancelUploadUseCase,
+    CompleteUploadUseCase,
     CopyEntryUseCase,
     CreateFolderUseCase,
     GetFileDetailsUseCase,
+    GetUploadStatusUseCase,
     ListFolderEntriesUseCase,
     MoveEntryUseCase,
     PermanentlyDeleteUseCase,
     RenameEntryUseCase,
     RestoreEntryUseCase,
+    StartUploadUseCase,
     TrashEntryUseCase,
 )
+from app.application.use_cases.storage.uploads import UploadUseCase
 from app.application.use_cases.system import GetHealthUseCase, GetReadinessUseCase
 from app.infrastructure.config import Settings
 from app.infrastructure.persistence import Database, SQLAlchemyUnitOfWorkFactory
@@ -35,6 +46,9 @@ from app.infrastructure.security import (
     PyJwtProvider,
     SystemClock,
 )
+from app.infrastructure.storage import LocalFileStorageProvider
+from app.infrastructure.storage.metrics import LoggingUploadMetricsRecorder
+from app.infrastructure.storage.mime import SignatureMimeDetector
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +74,12 @@ class ApplicationContainer:
     permanently_delete: PermanentlyDeleteUseCase
     list_folder_entries: ListFolderEntriesUseCase
     get_file_details: GetFileDetailsUseCase
+    start_upload: StartUploadUseCase
+    get_upload_status: GetUploadStatusUseCase
+    append_upload_chunk: AppendUploadChunkUseCase
+    complete_upload: CompleteUploadUseCase
+    cancel_upload: CancelUploadUseCase
+    file_storage: FileStorageProvider
 
     @classmethod
     def build(cls, settings: Settings) -> "ApplicationContainer":
@@ -99,6 +119,22 @@ class ApplicationContainer:
             secrets=secrets,
             clock=clock,
         )
+        file_storage = LocalFileStorageProvider(settings.storage_root)
+        upload_policy = UploadPolicyDTO(
+            maximum_file_size=settings.max_upload_size_bytes,
+            maximum_chunk_size=settings.max_upload_chunk_size_bytes,
+            maximum_logical_path_length=settings.max_logical_path_length,
+            session_ttl_seconds=settings.upload_session_ttl_seconds,
+            allowed_extensions=_normalized_values(settings.upload_allowed_extensions),
+            blocked_extensions=_normalized_values(settings.upload_blocked_extensions),
+            allowed_mime_types=frozenset(
+                value.strip().casefold()
+                for value in settings.upload_allowed_mime_types
+                if value.strip()
+            ),
+        )
+        mime_detector = SignatureMimeDetector()
+        upload_metrics = LoggingUploadMetricsRecorder()
         return cls(
             get_health=GetHealthUseCase(
                 service_name=settings.app_name,
@@ -184,4 +220,82 @@ class ApplicationContainer:
             ),
             list_folder_entries=ListFolderEntriesUseCase(unit_of_work_factory),
             get_file_details=GetFileDetailsUseCase(unit_of_work_factory),
+            start_upload=_build_upload_use_case(
+                StartUploadUseCase,
+                unit_of_work_factory,
+                file_storage,
+                id_generator,
+                clock,
+                mime_detector,
+                upload_metrics,
+                upload_policy,
+            ),
+            get_upload_status=_build_upload_use_case(
+                GetUploadStatusUseCase,
+                unit_of_work_factory,
+                file_storage,
+                id_generator,
+                clock,
+                mime_detector,
+                upload_metrics,
+                upload_policy,
+            ),
+            append_upload_chunk=_build_upload_use_case(
+                AppendUploadChunkUseCase,
+                unit_of_work_factory,
+                file_storage,
+                id_generator,
+                clock,
+                mime_detector,
+                upload_metrics,
+                upload_policy,
+            ),
+            complete_upload=_build_upload_use_case(
+                CompleteUploadUseCase,
+                unit_of_work_factory,
+                file_storage,
+                id_generator,
+                clock,
+                mime_detector,
+                upload_metrics,
+                upload_policy,
+            ),
+            cancel_upload=_build_upload_use_case(
+                CancelUploadUseCase,
+                unit_of_work_factory,
+                file_storage,
+                id_generator,
+                clock,
+                mime_detector,
+                upload_metrics,
+                upload_policy,
+            ),
+            file_storage=file_storage,
         )
+
+
+def _normalized_values(values: tuple[str, ...]) -> frozenset[str]:
+    return frozenset(
+        value.strip().removeprefix(".").casefold() for value in values if value.strip()
+    )
+
+
+def _build_upload_use_case[UploadUseCaseT: UploadUseCase](
+    use_case_type: type[UploadUseCaseT],
+    unit_of_work_factory: UnitOfWorkFactory,
+    storage: FileStorageProvider,
+    id_generator: IdGenerator,
+    clock: Clock,
+    mime_detector: MimeDetector,
+    metrics: UploadMetricsRecorder,
+    policy: UploadPolicyDTO,
+) -> UploadUseCaseT:
+    return use_case_type(
+        unit_of_work_factory=unit_of_work_factory,
+        storage=storage,
+        id_generator=id_generator,
+        clock=clock,
+        mime_detector=mime_detector,
+        metrics=metrics,
+        policy=policy,
+    )

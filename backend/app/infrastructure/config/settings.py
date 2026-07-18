@@ -46,6 +46,25 @@ class Settings(BaseSettings):
         default=50 * 1024 * 1024 * 1024,
         gt=0,
     )
+    max_upload_chunk_size_bytes: int = Field(
+        default=16 * 1024 * 1024,
+        ge=64 * 1024,
+        le=256 * 1024 * 1024,
+    )
+    upload_session_ttl_seconds: int = Field(default=86_400, ge=300, le=604_800)
+    max_logical_path_length: int = Field(default=4096, ge=255, le=16_384)
+    upload_allowed_extensions: tuple[str, ...] = ()
+    upload_blocked_extensions: tuple[str, ...] = (
+        "bat",
+        "cmd",
+        "com",
+        "dll",
+        "exe",
+        "msi",
+        "ps1",
+        "scr",
+    )
+    upload_allowed_mime_types: tuple[str, ...] = ()
     default_page_size: int = Field(default=50, ge=1, le=200)
     max_page_size: int = Field(default=200, ge=1, le=500)
     docs_enabled: bool = True

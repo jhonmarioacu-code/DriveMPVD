@@ -106,3 +106,26 @@ class StorageNameConflictError(ConflictError):
 
     code = "storage.name_conflict"
     default_message = "An entry with that name already exists in the destination."
+
+
+class UploadSessionNotFoundError(ResourceNotFoundError):
+    code = "storage.upload_not_found"
+    default_message = "The upload session was not found."
+
+
+class UploadOffsetMismatchError(ConflictError):
+    code = "storage.upload_offset_mismatch"
+    default_message = "The upload offset does not match the persisted offset."
+
+    def __init__(self, *, expected_offset: int) -> None:
+        self.expected_offset = expected_offset
+        super().__init__()
+
+
+class UploadValidationError(ApplicationValidationError):
+    code = "storage.upload_validation_error"
+
+
+class UploadStateConflictError(ConflictError):
+    code = "storage.upload_state_conflict"
+    default_message = "The upload session is not in a valid state for this operation."
