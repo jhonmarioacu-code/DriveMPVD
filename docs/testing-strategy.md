@@ -1,8 +1,8 @@
 # Estrategia de pruebas
 
-El umbral global de cobertura es **80 %** de líneas y ramas en backend y
-frontend. El umbral no sustituye pruebas de invariantes, integración y flujos
-críticos.
+El mínimo contractual global es **80 %** de líneas y ramas. Desde el incremento
+2.2 el backend aplica una puerta más estricta del **90 %**. El umbral no
+sustituye pruebas de invariantes, integración y flujos críticos.
 
 Cada funcionalidad se entrega junto con sus pruebas unitarias en el mismo
 incremento. Ningún módulo se considera terminado si sus pruebas, lint, formato

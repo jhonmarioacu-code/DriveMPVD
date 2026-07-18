@@ -42,3 +42,18 @@ python -m pytest
 
 La aplicación ASGI se expone como `app.main:app`. Toda configuración disponible
 está enumerada en `.env.example`; los valores reales no se versionan.
+
+## Migraciones
+
+Alembic obtiene la URL mediante el `Settings` central. Con
+`DRIVEMPVD_DATABASE_URL` definido:
+
+```bash
+alembic upgrade head
+alembic current
+alembic check
+```
+
+Los downgrades se prueban automáticamente. Antes de ejecutarlos en producción
+se requiere backup, porque una reversión estructural puede eliminar datos aun
+cuando el DDL sea técnicamente reversible.
