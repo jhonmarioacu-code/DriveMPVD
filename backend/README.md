@@ -57,3 +57,15 @@ alembic check
 Los downgrades se prueban automáticamente. Antes de ejecutarlos en producción
 se requiere backup, porque una reversión estructural puede eliminar datos aun
 cuando el DDL sea técnicamente reversible.
+
+## Crear el administrador
+
+Después de `alembic upgrade head`, la única cuenta se crea mediante un comando
+interactivo. La contraseña no entra en argumentos ni historial del shell:
+
+```bash
+python -m app.infrastructure.cli.create_admin admin
+```
+
+El comando falla si ya existe una cuenta. No hay endpoint de registro, CRUD de
+usuarios, roles ni recuperación pública de contraseña.

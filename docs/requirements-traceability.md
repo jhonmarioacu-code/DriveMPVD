@@ -6,7 +6,7 @@ en la Fase 1.
 
 | Requisito | Decisión/contrato | Fase principal |
 |---|---|---|
-| Usuario único y login | Singleton `AdminAccount`, sin registro/roles | 4 |
+| Usuario único y login | Singleton `AdminAccount`, sin registro/roles | 2.3 implementado |
 | Crear, renombrar, mover, copiar y borrar | Aggregate `Entry`, commands y UoW | 5 |
 | Carpetas y subcarpetas | Árbol lógico por `parent_id` | 5 |
 | Lista, cuadrícula, breadcrumb y menú | App shell/features virtualizadas | 3 y 5 |
@@ -22,7 +22,7 @@ en la Fase 1.
 | Orden nombre/fecha/tamaño/tipo | Keyset con desempate por id | 5 |
 | Favoritos y recientes | Módulo `activity` | 5 |
 | Papelera/restaurar/vaciar | `TrashRecord` y jobs por lotes | 5 |
-| Argon2, JWT, CSRF y rate limit | Cookies HttpOnly, refresh rotatorio, Nginx/DB | 4 |
+| Argon2, JWT, CSRF y rate limit | Cookies HttpOnly, refresh rotatorio, PostgreSQL | 2.3 implementado |
 | Headers y validación de subida | Nginx, middleware y value objects | 4 y 6 |
 | Protección path traversal | Blob UUID y confinamiento de raíz | 2 y 6 |
 | Solo `/data/storage` | Object store local sharded | 2 |

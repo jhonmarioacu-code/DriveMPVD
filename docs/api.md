@@ -30,7 +30,7 @@ y `request_id`.
 
 | Área | Rutas principales |
 |---|---|
-| Sesión | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/session`, `GET /auth/csrf` |
+| Sesión | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/sessions/revoke-all`, `GET /auth/session` |
 | Navegación | `GET /entries`, `GET /entries/{id}`, `GET /entries/{id}/breadcrumbs` |
 | Carpetas | `POST /folders` |
 | Mutaciones | `PATCH /entries/{id}`, `POST /entries/{id}/move`, `POST /entries/{id}/copy`, `DELETE /entries/{id}` |

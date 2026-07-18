@@ -1,6 +1,6 @@
 # ADR-0004: JWT en cookies y protección CSRF
 
-- Estado: aceptada
+- Estado: reemplazada parcialmente por ADR-0008
 - Fecha: 2026-07-18
 
 ## Contexto

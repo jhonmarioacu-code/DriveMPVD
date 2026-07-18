@@ -14,10 +14,12 @@ publicar `/data/storage` como un directorio estático.
   cuando cambie la política.
 - Access JWT corto (objetivo 15 minutos) en cookie `HttpOnly`, `Secure` y
   `SameSite=Lax`.
-- Refresh token opaco, rotatorio y en cookie separada; solo su hash se persiste.
+- Refresh JWT rotatorio en cookie separada; solo un HMAC del token vigente se
+  persiste. Reutilizar un token anterior revoca inmediatamente su familia.
 - JWT con `iss`, `aud`, `sub`, `iat`, `nbf`, `exp` y `jti`; algoritmo y claves
   fijados por configuración, sin aceptar el algoritmo del token.
-- Logout y rotación revocan sesiones persistidas. El cambio de contraseña
+- Logout, detección de reutilización y revocación administrativa actualizan
+  sesiones persistidas. El cambio de contraseña
   revoca todas.
 
 Los secretos solo se inyectan por archivos Docker secrets o variables de

@@ -10,3 +10,4 @@ reemplaza conservando el historial.
 - [ADR-0005: Composition root en infraestructura](0005-infrastructure-composition-root.md)
 - [ADR-0006: Contratos transversales del backend](0006-backend-foundation-contracts.md)
 - [ADR-0007: PostgreSQL asíncrono, UoW y outbox](0007-async-postgresql-uow-outbox.md)
+- [ADR-0008: Sesiones JWT rotatorias del administrador](0008-admin-jwt-sessions.md)
