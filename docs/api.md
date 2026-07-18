@@ -8,9 +8,7 @@
 - `error` incluye `code`, `message` y errores de campo opcionales; los detalles
   internos nunca salen de la API.
 - `X-Request-ID` aceptado o generado y devuelto.
-- Commands mutables admiten `Idempotency-Key` donde una repetición pueda crear
-  recursos o jobs.
-- ETags y precondiciones evitan sobrescrituras silenciosas al renombrar/mover.
+- ETag y Last-Modified permiten revalidar lecturas de metadatos.
 - OpenAPI es el contrato fuente para generar tipos del cliente TypeScript.
 
 ## Envelope uniforme
@@ -26,19 +24,25 @@ mediante una tabla explícita de códigos y estados HTTP. Errores inesperados
 responden con un código público genérico y se registran en JSON con stack trace
 y `request_id`.
 
-## Recursos previstos
+## Recursos implementados
 
 | Área | Rutas principales |
 |---|---|
 | Sesión | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/sessions/revoke-all`, `GET /auth/session` |
-| Navegación | `GET /entries`, `GET /entries/{id}`, `GET /entries/{id}/breadcrumbs` |
-| Carpetas | `POST /folders` |
-| Mutaciones | `PATCH /entries/{id}`, `POST /entries/{id}/move`, `POST /entries/{id}/copy`, `DELETE /entries/{id}` |
+| Navegación | `GET /storage/folders/{folder_id}/entries`, `GET /storage/files/{file_id}` |
+| Carpetas | `POST /storage/folders` |
+| Mutaciones | `PATCH /storage/entries/{id}`, `POST /storage/entries/{id}/move`, `POST /storage/entries/{id}/copy`, `POST /storage/entries/{id}/trash` |
+| Papelera | `POST /storage/trash/{id}/restore`, `DELETE /storage/trash/{id}` |
+
+## Recursos previstos
+
+| Área | Rutas principales |
+|---|---|
 | Descarga | `GET /entries/{id}/content` |
 | Subidas | `POST /uploads`, `HEAD /uploads/{id}`, `PATCH /uploads/{id}`, `POST /uploads/{id}/complete`, `DELETE /uploads/{id}` |
 | Búsqueda | `GET /search` |
 | Actividad | `GET /recents`, `PUT /favorites/{id}`, `DELETE /favorites/{id}`, `GET /favorites` |
-| Papelera | `GET /trash`, `POST /trash/{id}/restore`, `DELETE /trash/{id}`, `DELETE /trash` |
+| Papelera | `GET /trash`, `DELETE /trash` |
 | Medios | `GET /entries/{id}/thumbnail`, `GET /entries/{id}/preview`, `GET /jobs/{id}` |
 
 La especificación OpenAPI concreta y validada se genera desde FastAPI a medida
@@ -51,13 +55,14 @@ solo fija convenciones arquitectónicas, no duplica schemas operativos.
 Todos los listados requieren `limit` (por defecto 50, máximo 200) y devuelven
 `items` más `next_cursor`. No existe endpoint que entregue el árbol completo.
 
-Los cursores son opacos, firmados y contienen el último valor de orden y el id
-de desempate. Orden soportado: `name`, `updated_at`, `size` y `type`, ascendente
-o descendente. Cada orden añade siempre `id` como desempate estable.
+Los cursores son opacos y versionados; contienen el último valor de orden y el
+id de desempate, y quedan ligados al orden y dirección solicitados. Orden
+soportado: `name`, `date`, `size` y `type`, ascendente o descendente. Cada orden
+añade siempre `id` como desempate estable.
 
-La navegación filtra por `parent_id`; la búsqueda acepta nombre, extensión,
-tipo, intervalos de fecha y tamaño. Las consultas vacías o excesivamente
-amplias se limitan y paginan igual que cualquier listado.
+La navegación restringe por carpeta y propietario; acepta nombre, extensión,
+clase de entrada, intervalos de fecha y tamaño. Las consultas se limitan y
+paginan incluso sin filtros.
 
 ## Subida reanudable
 

@@ -7,8 +7,8 @@ en la Fase 1.
 | Requisito | Decisión/contrato | Fase principal |
 |---|---|---|
 | Usuario único y login | Singleton `AdminAccount`, sin registro/roles | 2.3 implementado |
-| Crear, renombrar, mover, copiar y borrar | Entidades, commands y UoW | 2.4 dominio implementado; API en 5 |
-| Carpetas y subcarpetas | Adyacencia por `parent_id` y CTE | 2.4 dominio implementado; API en 5 |
+| Crear, renombrar, mover, copiar y borrar | Entidades, commands, UoW y REST | 2.5 API implementada |
+| Carpetas y subcarpetas | Adyacencia, CTE y listado keyset | 2.5 API implementada |
 | Lista, cuadrícula, breadcrumb y menú | App shell/features virtualizadas | 3 y 5 |
 | Subir archivos/carpetas y drag-and-drop | Sesiones reanudables y rutas segmentadas | 6 |
 | Archivos de hasta 50 GB | Streaming a staging, offset y rename atómico | 6 |
@@ -19,15 +19,15 @@ en la Fase 1.
 | Miniaturas imagen/video/PDF | `MediaAsset` + worker durable | 7 |
 | Word/Excel/PowerPoint/TXT/ZIP/RAR/7Z | Clasificación MIME/extensión e iconos | 5 |
 | Búsqueda por metadatos | `pg_trgm`, filtros y cursores | 5 y 9 |
-| Orden nombre/fecha/tamaño/tipo | Keyset con desempate por id | 5 |
+| Orden nombre/fecha/tamaño/tipo | Keyset con desempate por id | 2.5 implementado |
 | Favoritos y recientes | Módulo `activity` | 5 |
-| Papelera/restaurar/vaciar | `TrashItem`, soft delete recursivo y outbox | 2.4 dominio implementado; API/job en 5 |
+| Papelera/restaurar/vaciar | REST para trash/restore/purge; vaciado futuro | 2.5 parcial implementado |
 | Argon2, JWT, CSRF y rate limit | Cookies HttpOnly, refresh rotatorio, PostgreSQL | 2.3 implementado |
 | Headers y validación de subida | Nginx, middleware y value objects | 4 y 6 |
 | Protección path traversal | Blob UUID y confinamiento de raíz | 2 y 6 |
 | Solo `/data/storage` | Object store local sharded | 2 |
 | 500k archivos/100k carpetas | Índices, cursores, queries proyectadas | 2 y 9 |
-| REST, Swagger y OpenAPI | `/api/v1`, Problem Details y contrato generado | 2 |
+| REST, Swagger y OpenAPI | `/api/v1`, envelope y contrato generado | 2.5 almacenamiento implementado |
 | Responsive, temas y notificaciones | Tokens, app shell y feedback por commands | 3 |
 | Atajos de teclado | Commands compartidos y control de foco | 5 |
 | 80 % de cobertura | Umbral de líneas/ramas y pirámide definida | 10 |
