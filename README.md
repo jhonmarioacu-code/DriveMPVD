@@ -13,7 +13,7 @@ incompletas.
 | Fase | Alcance | Estado |
 |---|---|---|
 | 1 | Arquitectura, límites, contratos y estructura | Terminada |
-| 2 | Backend, persistencia y autenticación | En curso — incremento 2.3 |
+| 2 | Backend, persistencia, autenticación y dominio de almacenamiento | En curso — incremento 2.4 |
 | 3 | Frontend base | Pendiente |
 | 4 | Autenticación y endurecimiento | Pendiente |
 | 5 | Explorador de archivos | Pendiente |
@@ -30,6 +30,7 @@ incompletas.
 - [Contrato y convenciones REST](docs/api.md)
 - [Seguridad](docs/security.md)
 - [Almacenamiento y transferencias](docs/storage.md)
+- [Dominio de almacenamiento implementado](docs/storage-domain.md)
 - [Rendimiento y escalabilidad](docs/performance.md)
 - [Arquitectura del frontend](docs/frontend-architecture.md)
 - [Estrategia de pruebas](docs/testing-strategy.md)

@@ -7,8 +7,8 @@ en la Fase 1.
 | Requisito | Decisión/contrato | Fase principal |
 |---|---|---|
 | Usuario único y login | Singleton `AdminAccount`, sin registro/roles | 2.3 implementado |
-| Crear, renombrar, mover, copiar y borrar | Aggregate `Entry`, commands y UoW | 5 |
-| Carpetas y subcarpetas | Árbol lógico por `parent_id` | 5 |
+| Crear, renombrar, mover, copiar y borrar | Entidades, commands y UoW | 2.4 dominio implementado; API en 5 |
+| Carpetas y subcarpetas | Adyacencia por `parent_id` y CTE | 2.4 dominio implementado; API en 5 |
 | Lista, cuadrícula, breadcrumb y menú | App shell/features virtualizadas | 3 y 5 |
 | Subir archivos/carpetas y drag-and-drop | Sesiones reanudables y rutas segmentadas | 6 |
 | Archivos de hasta 50 GB | Streaming a staging, offset y rename atómico | 6 |
@@ -21,7 +21,7 @@ en la Fase 1.
 | Búsqueda por metadatos | `pg_trgm`, filtros y cursores | 5 y 9 |
 | Orden nombre/fecha/tamaño/tipo | Keyset con desempate por id | 5 |
 | Favoritos y recientes | Módulo `activity` | 5 |
-| Papelera/restaurar/vaciar | `TrashRecord` y jobs por lotes | 5 |
+| Papelera/restaurar/vaciar | `TrashItem`, soft delete recursivo y outbox | 2.4 dominio implementado; API/job en 5 |
 | Argon2, JWT, CSRF y rate limit | Cookies HttpOnly, refresh rotatorio, PostgreSQL | 2.3 implementado |
 | Headers y validación de subida | Nginx, middleware y value objects | 4 y 6 |
 | Protección path traversal | Blob UUID y confinamiento de raíz | 2 y 6 |
@@ -42,7 +42,7 @@ en la Fase 1.
 | Errores globales | Jerarquías por capa y traducción HTTP única | 2 |
 | Respuesta uniforme | Envelope `data/error/meta` | 2 |
 | API docs automáticas | FastAPI OpenAPI como fuente única | 2 |
-| Storage intercambiable | Puerto `FileStorageProvider` streaming | 2 y 6 |
+| Storage intercambiable | Puerto `FileStorageProvider` streaming | 2.4 contrato implementado; adaptador en 6 |
 | PostgreSQL Full Text futuro | Puerto de búsqueda y evolución `tsvector`/GIN | 5 y 9 |
 | Versiones mínimas | Python 3.13, PostgreSQL 16, React 19, TypeScript 5.x | 2 y 3 |
 | Sin librerías experimentales | Solo releases estables y mantenidas | Transversal |

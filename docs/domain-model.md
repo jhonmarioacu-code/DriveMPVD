@@ -1,24 +1,26 @@
 # Modelo de dominio
 
-Este documento define conceptos y restricciones; no es todavía un esquema ORM.
+El módulo de almacenamiento está implementado y se detalla en
+[Dominio de almacenamiento](storage-domain.md). Los módulos posteriores de
+actividad y jobs continúan como diseño previsto.
 
-## Aggregate `Entry`
+## Entidades `Folder` y `File`
 
-Representa un archivo o carpeta en el árbol lógico.
+Representan carpetas y archivos distintos en dominio. La infraestructura los
+persiste bajo una raíz lógica común.
 
 | Concepto | Regla |
 |---|---|
-| `EntryId` | UUID generado por la aplicación, inmutable |
+| `id` | UUID v7 generado por la aplicación, inmutable |
 | `parent_id` | Carpeta padre; nulo solo para la raíz canónica |
-| `kind` | `file` o `folder`, nunca inferido de la extensión |
+| `entry_type` | `file` o `folder`, nunca inferido de la extensión |
 | `name` | Nombre visible validado; no contiene separadores ni segmentos `.`/`..` |
 | `normalized_name` | Forma normalizada para unicidad y búsqueda consistente |
-| `media_type` | MIME detectado por contenido cuando sea posible |
+| `mime_type` | MIME declarado/detectado; la extracción se implementará después |
 | `extension` | Valor normalizado, útil para filtro; no determina seguridad |
 | `size` | Bytes del blob para archivos; tamaño agregado no se calcula al listar |
-| `blob_key` | Identificador opaco solo para archivos materializados |
-| `trashed_at` | Nulo o instante de entrada a papelera |
-| `revision` | Control optimista para mutaciones concurrentes |
+| `checksum_sha256` | Digest canónico calculado durante la subida futura |
+| `deleted_at` | Nulo o instante de entrada del subárbol a papelera |
 
 Invariantes:
 
@@ -26,7 +28,7 @@ Invariantes:
 - Dos hijos activos de una carpeta no comparten `normalized_name`.
 - Una carpeta no puede moverse dentro de sí misma ni de un descendiente.
 - Renombrar o mover cambia metadatos, nunca la ubicación física de un blob.
-- Un archivo visible referencia exactamente un blob finalizado.
+- Una versión de archivo referencia exactamente un objeto de almacenamiento.
 - Los identificadores recibidos nunca se convierten en rutas del usuario.
 
 El árbol usa relación de adyacencia (`parent_id`) para que mover una carpeta
@@ -36,18 +38,17 @@ de filas.
 
 ## Papelera
 
-Mover a papelera crea un `TrashRecord` para la raíz seleccionada con su padre
-original y fecha. Los descendientes quedan ocultos por pertenecer a esa raíz,
-sin reescribirlos. Restaurar valida el destino y resuelve conflictos de nombre
-de forma explícita. Vaciar papelera crea un job que elimina metadatos por lotes
-y blobs no referenciados; no bloquea una petición HTTP larga.
+Mover a papelera crea un `TrashItem` para la raíz seleccionada y marca el
+subárbol completo mediante un CTE en una sola transacción. Restaurar valida el
+destino, resuelve conflictos y recupera el subárbol. La purga borra metadatos y
+emite un evento outbox; la eliminación física se implementará como job.
 
-## Blobs
+## Objetos y versiones
 
-`Blob` describe contenido físico por clave opaca, tamaño, checksum opcional,
-estado (`staging`, `ready`, `deleting`) y timestamps. La primera versión no
-hace deduplicación automática: evita costes de hash obligatorios sobre 50 GB y
-reduce acoplamiento. El contrato deja posible añadirla después.
+`StorageObject` describe contenido físico inmutable por clave opaca, tamaño,
+MIME, SHA-256 obligatorio, estado y timestamps. `FileVersion` conserva el
+snapshot de metadatos y referencia el objeto. No existe deduplicación global;
+una copia explícita sí puede compartir el mismo objeto inmutable.
 
 ## Aggregate `UploadSession`
 
@@ -55,11 +56,11 @@ Conserva longitud declarada, offset confirmado, destino, nombre, expiración y
 estado. Solo acepta escritura en el offset esperado; finalizar es idempotente.
 Una sesión completada no admite bytes adicionales.
 
-## `MediaAsset`
+## Derivados
 
-Representa un derivado de un blob: miniatura de imagen, fotograma de video o
-miniatura de PDF. Incluye variante, MIME, dimensiones, estado y clave física.
-Los derivados pueden regenerarse y no forman parte del backup esencial.
+`Thumbnail` y `Preview` representan derivados de una versión. Incluyen
+variante, estado y referencia opcional a un `StorageObject`; pueden regenerarse
+y no forman parte del backup esencial.
 
 ## Identidad
 
@@ -80,9 +81,9 @@ Un `Job` durable incluye tipo, payload versionado, estado, intentos,
 `available_at`, lease y error sanitizado. Los handlers son idempotentes. Se
 usará para copias recursivas, vaciado de papelera, miniaturas y mantenimiento.
 
-## Modelo relacional previsto
+## Modelo relacional actual
 
-Tablas principales: `entries`, `blobs`, `trash_records`, `upload_sessions`,
-`media_assets`, `favorites`, `recent_opens`, `admin_account`, `auth_sessions`,
-`jobs` y `outbox_events`. Las migraciones e índices exactos pertenecen a la
-Fase 2 y deberán verificarse con planes reales de PostgreSQL.
+La migración `20260718_0003` contiene `storage_entries`, `file_metadata`,
+`storage_objects`, `file_versions`, `thumbnails`, `previews`,
+`upload_sessions` y `trash_items`. Favoritos, recientes y jobs se incorporarán
+en sus incrementos correspondientes.
