@@ -82,7 +82,11 @@ class StorageRouteUseCases:
     permanently_delete: PermanentlyDeleteUseCase
 
 
-def create_storage_router(use_cases: StorageRouteUseCases) -> APIRouter:
+def create_storage_router(
+    use_cases: StorageRouteUseCases,
+    *,
+    csrf_header_name: str,
+) -> APIRouter:
     router = APIRouter(prefix="/storage")
 
     @router.get(
@@ -200,7 +204,7 @@ def create_storage_router(use_cases: StorageRouteUseCases) -> APIRouter:
         status_code=status.HTTP_201_CREATED,
         responses=_PROTECTED_RESPONSES,
         summary="Create a folder",
-        openapi_extra={"security": _AUTH_SECURITY},
+        openapi_extra=_mutation_openapi(csrf_header_name),
     )
     async def create_folder(
         payload: CreateFolderInput,
@@ -224,7 +228,7 @@ def create_storage_router(use_cases: StorageRouteUseCases) -> APIRouter:
         response_model=ApiResponse[StorageEntryData],
         responses=_PROTECTED_RESPONSES,
         summary="Rename a storage entry",
-        openapi_extra={"security": _AUTH_SECURITY},
+        openapi_extra=_mutation_openapi(csrf_header_name),
     )
     async def rename_entry(
         entry_id: UUID,
@@ -244,7 +248,7 @@ def create_storage_router(use_cases: StorageRouteUseCases) -> APIRouter:
         response_model=ApiResponse[StorageEntryData],
         responses=_PROTECTED_RESPONSES,
         summary="Move a storage entry",
-        openapi_extra={"security": _AUTH_SECURITY},
+        openapi_extra=_mutation_openapi(csrf_header_name),
     )
     async def move_entry(
         entry_id: UUID,
@@ -269,7 +273,7 @@ def create_storage_router(use_cases: StorageRouteUseCases) -> APIRouter:
         status_code=status.HTTP_201_CREATED,
         responses=_PROTECTED_RESPONSES,
         summary="Copy a storage entry",
-        openapi_extra={"security": _AUTH_SECURITY},
+        openapi_extra=_mutation_openapi(csrf_header_name),
     )
     async def copy_entry(
         entry_id: UUID,
@@ -294,7 +298,7 @@ def create_storage_router(use_cases: StorageRouteUseCases) -> APIRouter:
         response_model=ApiResponse[TrashItemData],
         responses=_PROTECTED_RESPONSES,
         summary="Move a storage entry to trash",
-        openapi_extra={"security": _AUTH_SECURITY},
+        openapi_extra=_mutation_openapi(csrf_header_name),
     )
     async def trash_entry(
         entry_id: UUID,
@@ -313,7 +317,7 @@ def create_storage_router(use_cases: StorageRouteUseCases) -> APIRouter:
         response_model=ApiResponse[StorageEntryData],
         responses=_PROTECTED_RESPONSES,
         summary="Restore a trashed entry",
-        openapi_extra={"security": _AUTH_SECURITY},
+        openapi_extra=_mutation_openapi(csrf_header_name),
     )
     async def restore_entry(
         trash_item_id: UUID,
@@ -337,7 +341,7 @@ def create_storage_router(use_cases: StorageRouteUseCases) -> APIRouter:
         response_model=ApiResponse[PermanentDeleteData],
         responses=_PROTECTED_RESPONSES,
         summary="Permanently delete a trashed subtree",
-        openapi_extra={"security": _AUTH_SECURITY},
+        openapi_extra=_mutation_openapi(csrf_header_name),
     )
     async def permanently_delete(
         trash_item_id: UUID,
@@ -394,3 +398,20 @@ def _trash_data(value: TrashItemDTO) -> TrashItemData:
         original_parent_id=value.original_parent_id,
         trashed_at=value.trashed_at,
     )
+
+
+def _mutation_openapi(csrf_header_name: str) -> dict[str, Any]:
+    return {
+        "security": _AUTH_SECURITY,
+        "parameters": [
+            {
+                "name": csrf_header_name,
+                "in": "header",
+                "required": False,
+                "schema": {"type": "string"},
+                "description": (
+                    "Required for cookie-authenticated mutations; omitted for Bearer."
+                ),
+            }
+        ],
+    }

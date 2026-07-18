@@ -188,6 +188,7 @@ async def test_storage_routes_require_auth_and_publish_openapi_contract(
     assert expected <= paths.keys()
     operation = paths["/api/v1/storage/folders"]["post"]
     assert operation["security"] == [{"BearerAuth": []}, {"AccessCookie": []}]
+    assert operation["parameters"][0]["name"] == "X-CSRF-Token"
     schemas = schema["components"]["schemas"]
     assert schemas["CreateFolderInput"]["examples"]
     assert schemas["FileDetailsData"]["examples"]

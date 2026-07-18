@@ -27,7 +27,10 @@ def create_api_router(
         tags=["authentication"],
     )
     router.include_router(
-        create_storage_router(storage_use_cases),
+        create_storage_router(
+            storage_use_cases,
+            csrf_header_name=cookie_policy.csrf_header_name,
+        ),
         tags=["storage"],
     )
     return router
