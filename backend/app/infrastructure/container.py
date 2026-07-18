@@ -15,6 +15,8 @@ from app.application.use_cases.auth import (
 from app.application.use_cases.storage import (
     CopyEntryUseCase,
     CreateFolderUseCase,
+    GetFileDetailsUseCase,
+    ListFolderEntriesUseCase,
     MoveEntryUseCase,
     PermanentlyDeleteUseCase,
     RenameEntryUseCase,
@@ -56,6 +58,8 @@ class ApplicationContainer:
     trash_entry: TrashEntryUseCase
     restore_entry: RestoreEntryUseCase
     permanently_delete: PermanentlyDeleteUseCase
+    list_folder_entries: ListFolderEntriesUseCase
+    get_file_details: GetFileDetailsUseCase
 
     @classmethod
     def build(cls, settings: Settings) -> "ApplicationContainer":
@@ -178,4 +182,6 @@ class ApplicationContainer:
                 id_generator=id_generator,
                 clock=clock,
             ),
+            list_folder_entries=ListFolderEntriesUseCase(unit_of_work_factory),
+            get_file_details=GetFileDetailsUseCase(unit_of_work_factory),
         )

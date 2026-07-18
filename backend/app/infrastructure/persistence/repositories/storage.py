@@ -5,12 +5,20 @@ from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import delete, literal, select, update
+from sqlalchemy import delete, func, literal, select, tuple_, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
-from app.application.dtos.storage import StorageTreeNodeDTO
+from app.application.dtos.storage import (
+    SortDirection,
+    StorageEntryKind,
+    StorageListFiltersDTO,
+    StoragePageCursorDTO,
+    StorageSortField,
+)
+from app.application.ports.storage_repository import StorageTreeNode
 from app.domain.storage.entities import (
     File,
     FileVersion,
@@ -73,6 +81,54 @@ class SQLAlchemyStorageRepository:
             for_update=for_update,
         )
         return entry if isinstance(entry, Folder) else None
+
+    async def list_children(
+        self,
+        *,
+        owner_id: UUID,
+        parent_id: UUID,
+        limit: int,
+        filters: StorageListFiltersDTO,
+        sort_by: StorageSortField,
+        direction: SortDirection,
+        cursor: StoragePageCursorDTO | None,
+    ) -> tuple[tuple[Folder | File, ...], bool]:
+        sort_expression = self._list_sort_expression(sort_by)
+        statement = (
+            select(StorageEntryModel, FileMetadataModel)
+            .outerjoin(
+                FileMetadataModel,
+                FileMetadataModel.entry_id == StorageEntryModel.id,
+            )
+            .where(
+                StorageEntryModel.owner_id == owner_id,
+                StorageEntryModel.parent_id == parent_id,
+                StorageEntryModel.deleted_at.is_(None),
+            )
+        )
+        statement = self._apply_list_filters(statement, filters)
+        if cursor is not None:
+            cursor_key = self._cursor_value(cursor.sort_key, sort_by)
+            keyset = tuple_(sort_expression, StorageEntryModel.id)
+            cursor_tuple = tuple_(literal(cursor_key), literal(cursor.entry_id))
+            statement = statement.where(
+                keyset > cursor_tuple
+                if direction is SortDirection.ASC
+                else keyset < cursor_tuple
+            )
+        ordering = (
+            (sort_expression.asc(), StorageEntryModel.id.asc())
+            if direction is SortDirection.ASC
+            else (sort_expression.desc(), StorageEntryModel.id.desc())
+        )
+        statement = statement.order_by(*ordering).limit(limit + 1)
+        try:
+            rows = (await self._session.execute(statement)).all()
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        has_more = len(rows) > limit
+        entries = tuple(self._to_entry(row[0], row[1]) for row in rows[:limit])
+        return entries, has_more
 
     async def name_exists(
         self,
@@ -234,7 +290,7 @@ class SQLAlchemyStorageRepository:
             raise PersistenceError() from exc
         return None if model is None else self._to_version(model)
 
-    async def stream_subtree(self, root_id: UUID) -> AsyncIterator[StorageTreeNodeDTO]:
+    async def stream_subtree(self, root_id: UUID) -> AsyncIterator[StorageTreeNode]:
         tree = (
             select(
                 StorageEntryModel.id.label("id"),
@@ -261,7 +317,7 @@ class SQLAlchemyStorageRepository:
         try:
             result = await self._session.stream(statement)
             async for entry_model, file_model, depth in result:
-                yield StorageTreeNodeDTO(
+                yield StorageTreeNode(
                     entry=self._to_entry(entry_model, file_model),
                     depth=int(depth),
                 )
@@ -370,6 +426,63 @@ class SQLAlchemyStorageRepository:
             await self._session.flush()
         except SQLAlchemyError as exc:
             raise PersistenceError() from exc
+
+    @staticmethod
+    def _list_sort_expression(sort_by: StorageSortField) -> ColumnElement[Any]:
+        if sort_by is StorageSortField.NAME:
+            return cast(ColumnElement[Any], StorageEntryModel.normalized_name)
+        if sort_by is StorageSortField.DATE:
+            return cast(ColumnElement[Any], StorageEntryModel.updated_at)
+        if sort_by is StorageSortField.SIZE:
+            return func.coalesce(FileMetadataModel.size, -1)
+        return cast(ColumnElement[Any], StorageEntryModel.entry_type)
+
+    @staticmethod
+    def _cursor_value(value: str, sort_by: StorageSortField) -> str | int | datetime:
+        if sort_by is StorageSortField.DATE:
+            return datetime.fromisoformat(value)
+        if sort_by is StorageSortField.SIZE:
+            return int(value)
+        return value
+
+    @staticmethod
+    def _apply_list_filters(
+        statement: Any,
+        filters: StorageListFiltersDTO,
+    ) -> Any:
+        if filters.name_contains is not None:
+            statement = statement.where(
+                StorageEntryModel.normalized_name.contains(
+                    filters.name_contains,
+                    autoescape=True,
+                )
+            )
+        if filters.kind is not None:
+            statement = statement.where(
+                StorageEntryModel.entry_type
+                == (
+                    EntryType.FOLDER.value
+                    if filters.kind is StorageEntryKind.FOLDER
+                    else EntryType.FILE.value
+                )
+            )
+        if filters.extension is not None:
+            statement = statement.where(
+                FileMetadataModel.extension == filters.extension
+            )
+        if filters.minimum_size is not None:
+            statement = statement.where(FileMetadataModel.size >= filters.minimum_size)
+        if filters.maximum_size is not None:
+            statement = statement.where(FileMetadataModel.size <= filters.maximum_size)
+        if filters.modified_from is not None:
+            statement = statement.where(
+                StorageEntryModel.updated_at >= filters.modified_from
+            )
+        if filters.modified_to is not None:
+            statement = statement.where(
+                StorageEntryModel.updated_at <= filters.modified_to
+            )
+        return statement
 
     @staticmethod
     def _entry_model(entry: StorageEntry) -> StorageEntryModel:

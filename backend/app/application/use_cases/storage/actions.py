@@ -8,10 +8,13 @@ from app.application.dtos.storage import (
     CopyEntryCommandDTO,
     CreateFolderCommandDTO,
     MoveEntryCommandDTO,
+    PermanentDeleteResultDTO,
     PermanentlyDeleteCommandDTO,
     RenameEntryCommandDTO,
     RestoreEntryCommandDTO,
+    StorageEntryDTO,
     TrashEntryCommandDTO,
+    TrashItemDTO,
 )
 from app.application.exceptions import (
     StorageEntryNotFoundError,
@@ -21,6 +24,7 @@ from app.application.ports.auth_services import Clock
 from app.application.ports.identifiers import IdGenerator
 from app.application.ports.storage_repository import StorageRepository
 from app.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from app.application.use_cases.storage.mappers import entry_to_dto, trash_to_dto
 from app.domain.storage.entities import (
     File,
     FileVersion,
@@ -79,7 +83,7 @@ class StorageUseCase:
 
 
 class CreateFolderUseCase(StorageUseCase):
-    async def execute(self, command: CreateFolderCommandDTO) -> Folder:
+    async def execute(self, command: CreateFolderCommandDTO) -> StorageEntryDTO:
         now = self._clock.now()
         name = EntryName.create(command.name)
         async with self._unit_of_work_factory() as unit_of_work:
@@ -106,11 +110,11 @@ class CreateFolderUseCase(StorageUseCase):
             )
             await unit_of_work.storage.add_folder(folder)
             await unit_of_work.commit()
-        return folder
+        return entry_to_dto(folder)
 
 
 class RenameEntryUseCase(StorageUseCase):
-    async def execute(self, command: RenameEntryCommandDTO) -> StorageEntry:
+    async def execute(self, command: RenameEntryCommandDTO) -> StorageEntryDTO:
         now = self._clock.now()
         name = EntryName.create(command.new_name)
         async with self._unit_of_work_factory() as unit_of_work:
@@ -132,11 +136,11 @@ class RenameEntryUseCase(StorageUseCase):
             entry.rename(name, now=now)
             await unit_of_work.storage.save_entry(entry)
             await unit_of_work.commit()
-        return entry
+        return entry_to_dto(entry)
 
 
 class MoveEntryUseCase(StorageUseCase):
-    async def execute(self, command: MoveEntryCommandDTO) -> StorageEntry:
+    async def execute(self, command: MoveEntryCommandDTO) -> StorageEntryDTO:
         now = self._clock.now()
         async with self._unit_of_work_factory() as unit_of_work:
             entry = self._require_owned(
@@ -169,11 +173,11 @@ class MoveEntryUseCase(StorageUseCase):
             entry.move(destination.id, now=now)
             await unit_of_work.storage.save_entry(entry)
             await unit_of_work.commit()
-        return entry
+        return entry_to_dto(entry)
 
 
 class CopyEntryUseCase(StorageUseCase):
-    async def execute(self, command: CopyEntryCommandDTO) -> StorageEntry:
+    async def execute(self, command: CopyEntryCommandDTO) -> StorageEntryDTO:
         now = self._clock.now()
         async with self._unit_of_work_factory() as unit_of_work:
             source = self._require_owned(
@@ -214,7 +218,7 @@ class CopyEntryUseCase(StorageUseCase):
                     now=now,
                 )
             await unit_of_work.commit()
-        return copied
+        return entry_to_dto(copied)
 
     async def _copy_folder_tree(
         self,
@@ -316,7 +320,7 @@ class CopyEntryUseCase(StorageUseCase):
 
 
 class TrashEntryUseCase(StorageUseCase):
-    async def execute(self, command: TrashEntryCommandDTO) -> TrashItem:
+    async def execute(self, command: TrashEntryCommandDTO) -> TrashItemDTO:
         now = self._clock.now()
         async with self._unit_of_work_factory() as unit_of_work:
             entry = self._require_owned(
@@ -331,7 +335,7 @@ class TrashEntryUseCase(StorageUseCase):
                 existing = await unit_of_work.storage.get_trash_item_by_entry(entry.id)
                 if existing is None:
                     raise InvalidStateTransitionError()
-                return existing
+                return trash_to_dto(existing)
             if entry.parent_id is None:
                 raise InvalidStateTransitionError("The storage root cannot be trashed.")
             trash_item = TrashItem(
@@ -345,11 +349,11 @@ class TrashEntryUseCase(StorageUseCase):
             await unit_of_work.storage.soft_delete_subtree(entry.id, deleted_at=now)
             await unit_of_work.storage.add_trash_item(trash_item)
             await unit_of_work.commit()
-        return trash_item
+        return trash_to_dto(trash_item)
 
 
 class RestoreEntryUseCase(StorageUseCase):
-    async def execute(self, command: RestoreEntryCommandDTO) -> StorageEntry:
+    async def execute(self, command: RestoreEntryCommandDTO) -> StorageEntryDTO:
         now = self._clock.now()
         async with self._unit_of_work_factory() as unit_of_work:
             trash_item = await unit_of_work.storage.get_trash_item(
@@ -384,11 +388,13 @@ class RestoreEntryUseCase(StorageUseCase):
             await unit_of_work.storage.restore_subtree(entry.id, restored_at=now)
             await unit_of_work.storage.remove_trash_item(trash_item.id)
             await unit_of_work.commit()
-        return entry
+        return entry_to_dto(entry)
 
 
 class PermanentlyDeleteUseCase(StorageUseCase):
-    async def execute(self, command: PermanentlyDeleteCommandDTO) -> int:
+    async def execute(
+        self, command: PermanentlyDeleteCommandDTO
+    ) -> PermanentDeleteResultDTO:
         now = self._clock.now()
         async with self._unit_of_work_factory() as unit_of_work:
             trash_item = await unit_of_work.storage.get_trash_item(
@@ -419,4 +425,4 @@ class PermanentlyDeleteUseCase(StorageUseCase):
                 )
             )
             await unit_of_work.commit()
-        return deleted_count
+        return PermanentDeleteResultDTO(deleted_entries=deleted_count)

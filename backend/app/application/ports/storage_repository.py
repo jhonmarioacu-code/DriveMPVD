@@ -1,11 +1,17 @@
 """Storage aggregate repository port."""
 
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from app.application.dtos.storage import StorageTreeNodeDTO
+from app.application.dtos.storage import (
+    SortDirection,
+    StorageListFiltersDTO,
+    StoragePageCursorDTO,
+    StorageSortField,
+)
 from app.domain.storage.entities import (
     File,
     FileVersion,
@@ -14,6 +20,14 @@ from app.domain.storage.entities import (
     StorageObject,
     TrashItem,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class StorageTreeNode:
+    """Internal depth-ordered domain node used by recursive commands."""
+
+    entry: Folder | File
+    depth: int
 
 
 class StorageRepository(Protocol):
@@ -34,6 +48,18 @@ class StorageRepository(Protocol):
         include_deleted: bool = False,
         for_update: bool = False,
     ) -> Folder | None: ...
+
+    async def list_children(
+        self,
+        *,
+        owner_id: UUID,
+        parent_id: UUID,
+        limit: int,
+        filters: StorageListFiltersDTO,
+        sort_by: StorageSortField,
+        direction: SortDirection,
+        cursor: StoragePageCursorDTO | None,
+    ) -> tuple[tuple[Folder | File, ...], bool]: ...
 
     async def name_exists(
         self,
@@ -63,7 +89,7 @@ class StorageRepository(Protocol):
 
     async def get_current_version(self, file_id: UUID) -> FileVersion | None: ...
 
-    def stream_subtree(self, root_id: UUID) -> AsyncIterator[StorageTreeNodeDTO]: ...
+    def stream_subtree(self, root_id: UUID) -> AsyncIterator[StorageTreeNode]: ...
 
     async def add_trash_item(self, trash_item: TrashItem) -> None: ...
 

@@ -17,6 +17,7 @@ from app.application.dtos.storage import (
     PermanentlyDeleteCommandDTO,
     RenameEntryCommandDTO,
     RestoreEntryCommandDTO,
+    StorageEntryKind,
     TrashEntryCommandDTO,
 )
 from app.application.exceptions import StorageNameConflictError
@@ -205,11 +206,13 @@ async def test_copy_file_reuses_immutable_object_without_deduplicating(
         )
     )
 
-    assert isinstance(copied, File)
-    assert copied.internal_name != source.internal_name
+    assert copied.kind is StorageEntryKind.FILE
     async with context.container.unit_of_work_factory() as unit_of_work:
+        copied_entry = await unit_of_work.storage.get_entry(copied.id)
         version = await unit_of_work.storage.get_current_version(copied.id)
         loaded_object = await unit_of_work.storage.get_storage_object(storage_object.id)
+    assert isinstance(copied_entry, File)
+    assert copied_entry.internal_name != source.internal_name
     assert version is not None
     assert version.storage_object_id == storage_object.id
     assert loaded_object == storage_object
@@ -260,7 +263,7 @@ async def test_recursive_copy_trash_restore_and_permanent_deletion_are_atomic(
     restored = await context.container.restore_entry.execute(
         RestoreEntryCommandDTO(context.owner_id, trash_item.id)
     )
-    assert restored.deleted_at is None
+    assert restored.parent_id == context.root_id
     async with context.container.unit_of_work_factory() as unit_of_work:
         assert (
             await unit_of_work.storage.get_entry(copied_tree[-1].entry.id) is not None
@@ -272,7 +275,7 @@ async def test_recursive_copy_trash_restore_and_permanent_deletion_are_atomic(
     deleted_count = await context.container.permanently_delete.execute(
         PermanentlyDeleteCommandDTO(context.owner_id, second_trash.id)
     )
-    assert deleted_count == 3
+    assert deleted_count.deleted_entries == 3
     async with context.container.unit_of_work_factory() as unit_of_work:
         assert (
             await unit_of_work.storage.get_entry(copied.id, include_deleted=True)

@@ -28,7 +28,6 @@ from app.application.dtos.storage import (
     PermanentlyDeleteCommandDTO,
     RenameEntryCommandDTO,
     RestoreEntryCommandDTO,
-    StorageTreeNodeDTO,
     TrashEntryCommandDTO,
 )
 from app.application.dtos.system import HealthStatusDTO, ReadinessStatusDTO
@@ -60,6 +59,5 @@ __all__ = [
     "RefreshTokenClaimsDTO",
     "RenameEntryCommandDTO",
     "RestoreEntryCommandDTO",
-    "StorageTreeNodeDTO",
     "TrashEntryCommandDTO",
 ]
