@@ -9,10 +9,15 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from app.application.exceptions import (
+    AccountDisabledError,
     ApplicationError,
     ApplicationValidationError,
+    AuthenticationError,
+    AuthenticationRequiredError,
     ConflictError,
+    CsrfValidationError,
     DependencyUnavailableError,
+    RateLimitExceededError,
     ResourceNotFoundError,
 )
 from app.domain.exceptions import DomainError
@@ -39,6 +44,7 @@ def _json_error(
     code: str,
     message: str,
     details: tuple[ErrorDetail, ...] = (),
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     envelope = error_response(
         ApiError(code=code, message=message, details=details),
@@ -47,6 +53,7 @@ def _json_error(
     return JSONResponse(
         status_code=status_code,
         content=envelope.model_dump(mode="json"),
+        headers=headers,
     )
 
 
@@ -68,6 +75,7 @@ async def handle_application_error(
     """Map expected use-case errors without exposing adapter details."""
     assert isinstance(exc, ApplicationError)
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    headers: dict[str, str] | None = None
     if isinstance(exc, ResourceNotFoundError):
         status_code = status.HTTP_404_NOT_FOUND
     elif isinstance(exc, ConflictError):
@@ -76,11 +84,20 @@ async def handle_application_error(
         status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     elif isinstance(exc, DependencyUnavailableError):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    elif isinstance(exc, (AuthenticationError, AuthenticationRequiredError)):
+        status_code = status.HTTP_401_UNAUTHORIZED
+        headers = {"WWW-Authenticate": "Bearer"}
+    elif isinstance(exc, (CsrfValidationError, AccountDisabledError)):
+        status_code = status.HTTP_403_FORBIDDEN
+    elif isinstance(exc, RateLimitExceededError):
+        status_code = status.HTTP_429_TOO_MANY_REQUESTS
+        headers = {"Retry-After": str(exc.retry_after_seconds)}
     return _json_error(
         request,
         status_code=status_code,
         code=exc.code,
         message=exc.public_message,
+        headers=headers,
     )
 
 

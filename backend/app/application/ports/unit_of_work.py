@@ -3,6 +3,11 @@
 from types import TracebackType
 from typing import Protocol, Self
 
+from app.application.ports.auth_repositories import (
+    AdminAccountRepository,
+    AuthSessionRepository,
+    SecurityEventRepository,
+)
 from app.application.ports.outbox_repository import OutboxRepository
 
 
@@ -13,6 +18,15 @@ class UnitOfWork(Protocol):
     def outbox(self) -> OutboxRepository:
         """Return the outbox repository bound to this transaction."""
         ...
+
+    @property
+    def admin_accounts(self) -> AdminAccountRepository: ...
+
+    @property
+    def auth_sessions(self) -> AuthSessionRepository: ...
+
+    @property
+    def security_events(self) -> SecurityEventRepository: ...
 
     async def __aenter__(self) -> Self:
         """Open a transaction."""

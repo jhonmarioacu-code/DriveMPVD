@@ -5,9 +5,19 @@ from types import TracebackType
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.application.ports.auth_repositories import (
+    AdminAccountRepository,
+    AuthSessionRepository,
+    SecurityEventRepository,
+)
 from app.application.ports.identifiers import IdGenerator
 from app.application.ports.outbox_repository import OutboxRepository
 from app.infrastructure.exceptions import PersistenceError, UnitOfWorkStateError
+from app.infrastructure.persistence.repositories.auth import (
+    SQLAlchemyAdminAccountRepository,
+    SQLAlchemyAuthSessionRepository,
+    SQLAlchemySecurityEventRepository,
+)
 from app.infrastructure.persistence.repositories.outbox import (
     SQLAlchemyOutboxRepository,
 )
@@ -25,6 +35,9 @@ class SQLAlchemyUnitOfWork:
         self._id_generator = id_generator
         self._session: AsyncSession | None = None
         self._outbox: SQLAlchemyOutboxRepository | None = None
+        self._admin_accounts: SQLAlchemyAdminAccountRepository | None = None
+        self._auth_sessions: SQLAlchemyAuthSessionRepository | None = None
+        self._security_events: SQLAlchemySecurityEventRepository | None = None
         self._completed = False
 
     @property
@@ -33,6 +46,24 @@ class SQLAlchemyUnitOfWork:
         if self._outbox is None or self._completed:
             raise UnitOfWorkStateError()
         return self._outbox
+
+    @property
+    def admin_accounts(self) -> AdminAccountRepository:
+        if self._admin_accounts is None or self._completed:
+            raise UnitOfWorkStateError()
+        return self._admin_accounts
+
+    @property
+    def auth_sessions(self) -> AuthSessionRepository:
+        if self._auth_sessions is None or self._completed:
+            raise UnitOfWorkStateError()
+        return self._auth_sessions
+
+    @property
+    def security_events(self) -> SecurityEventRepository:
+        if self._security_events is None or self._completed:
+            raise UnitOfWorkStateError()
+        return self._security_events
 
     async def __aenter__(self) -> "SQLAlchemyUnitOfWork":
         """Open a session and begin a transaction explicitly."""
@@ -49,6 +80,9 @@ class SQLAlchemyUnitOfWork:
             self._session,
             self._id_generator,
         )
+        self._admin_accounts = SQLAlchemyAdminAccountRepository(self._session)
+        self._auth_sessions = SQLAlchemyAuthSessionRepository(self._session)
+        self._security_events = SQLAlchemySecurityEventRepository(self._session)
         return self
 
     async def __aexit__(
@@ -67,6 +101,9 @@ class SQLAlchemyUnitOfWork:
             await session.close()
             self._session = None
             self._outbox = None
+            self._admin_accounts = None
+            self._auth_sessions = None
+            self._security_events = None
             self._completed = True
 
     async def commit(self) -> None:

@@ -1,0 +1,234 @@
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+
+from app.application.dtos.auth import BootstrapAdminCommandDTO
+from app.application.exceptions import ConflictError
+from app.infrastructure.bootstrap import create_application
+from app.infrastructure.config.settings import AppEnvironment, Settings
+from app.infrastructure.container import ApplicationContainer
+
+pytestmark = pytest.mark.postgresql
+
+
+@dataclass(slots=True)
+class AuthTestContext:
+    client: AsyncClient
+    container: ApplicationContainer
+
+
+@pytest.fixture
+async def auth_context(
+    migrated_database_url: str,
+    clean_auth: None,
+) -> AsyncIterator[AuthTestContext]:
+    del clean_auth
+    settings = Settings(
+        environment=AppEnvironment.TEST,
+        database_url=migrated_database_url,
+        storage_root=Path.cwd().anchor,
+        database_pool_size=2,
+        database_max_overflow=0,
+        argon2_time_cost=1,
+        argon2_memory_cost_kib=19_456,
+        argon2_parallelism=1,
+        jwt_access_secret="a" * 40,
+        jwt_refresh_secret="b" * 40,
+        auth_secret_pepper="c" * 40,
+        auth_cookie_secure=False,
+        maximum_failed_logins=2,
+        account_lock_seconds=60,
+        login_rate_limit=3,
+        login_rate_window_seconds=60,
+        login_rate_block_seconds=60,
+        refresh_rate_limit=5,
+    )
+    container = ApplicationContainer.build(settings)
+    await container.bootstrap_admin.execute(
+        BootstrapAdminCommandDTO(
+            username="Admin",
+            password="correct horse battery staple",
+        )
+    )
+    application = create_application(settings, container=container)
+    transport = ASGITransport(app=application, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="https://test") as client:
+        yield AuthTestContext(client=client, container=container)
+    await container.database.dispose()
+
+
+async def test_bearer_login_refresh_rotation_and_reuse_revocation(
+    auth_context: AuthTestContext,
+) -> None:
+    login = await auth_context.client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "admin",
+            "password": "correct horse battery staple",
+            "delivery": "bearer",
+        },
+    )
+    assert login.status_code == 200
+    first_tokens = login.json()["data"]
+    assert first_tokens["access_token"]
+    assert first_tokens["refresh_token"]
+    assert "drivempvd_access" not in login.cookies
+
+    session = await auth_context.client.get(
+        "/api/v1/auth/session",
+        headers={"Authorization": f"Bearer {first_tokens['access_token']}"},
+    )
+    assert session.status_code == 200
+    assert session.json()["data"]["username"] == "Admin"
+
+    refresh = await auth_context.client.post(
+        "/api/v1/auth/refresh",
+        json={
+            "refresh_token": first_tokens["refresh_token"],
+            "delivery": "bearer",
+        },
+    )
+    assert refresh.status_code == 200
+    rotated_tokens = refresh.json()["data"]
+    assert rotated_tokens["refresh_token"] != first_tokens["refresh_token"]
+
+    reuse = await auth_context.client.post(
+        "/api/v1/auth/refresh",
+        json={
+            "refresh_token": first_tokens["refresh_token"],
+            "delivery": "bearer",
+        },
+    )
+    assert reuse.status_code == 401
+    assert reuse.json()["error"]["code"] == "auth.session_revoked"
+
+    revoked_access = await auth_context.client.get(
+        "/api/v1/auth/session",
+        headers={"Authorization": f"Bearer {rotated_tokens['access_token']}"},
+    )
+    assert revoked_access.status_code == 401
+
+
+async def test_cookie_auth_requires_csrf_and_logout_revokes_session(
+    auth_context: AuthTestContext,
+) -> None:
+    login = await auth_context.client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "Admin",
+            "password": "correct horse battery staple",
+        },
+    )
+    assert login.status_code == 200
+    assert login.json()["data"]["access_token"] is None
+    assert auth_context.client.cookies.get("drivempvd_access")
+    csrf = auth_context.client.cookies.get("drivempvd_csrf")
+    assert csrf
+
+    rejected_refresh = await auth_context.client.post("/api/v1/auth/refresh", json={})
+    assert rejected_refresh.status_code == 403
+
+    refreshed = await auth_context.client.post(
+        "/api/v1/auth/refresh",
+        json={},
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert refreshed.status_code == 200
+    csrf = auth_context.client.cookies.get("drivempvd_csrf")
+    assert csrf
+
+    rejected = await auth_context.client.post("/api/v1/auth/logout")
+    assert rejected.status_code == 403
+    assert rejected.json()["error"]["code"] == "auth.csrf_validation_failed"
+
+    logout = await auth_context.client.post(
+        "/api/v1/auth/logout",
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert logout.status_code == 200
+
+    current = await auth_context.client.get("/api/v1/auth/session")
+    assert current.status_code == 401
+    assert current.headers["WWW-Authenticate"] == "Bearer"
+
+
+async def test_lockout_rate_limit_security_events_and_openapi(
+    auth_context: AuthTestContext,
+) -> None:
+    for expected_status in (401, 429):
+        response = await auth_context.client.post(
+            "/api/v1/auth/login",
+            json={"username": "Admin", "password": "wrong password"},
+        )
+        assert response.status_code == expected_status
+
+    locked = await auth_context.client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "Admin",
+            "password": "correct horse battery staple",
+        },
+    )
+    assert locked.status_code == 429
+    assert int(locked.headers["Retry-After"]) > 0
+
+    rate_limited = await auth_context.client.post(
+        "/api/v1/auth/login",
+        json={"username": "Admin", "password": "anything"},
+    )
+    assert rate_limited.status_code == 429
+    assert rate_limited.json()["error"]["code"] == "auth.rate_limit_exceeded"
+
+    async with auth_context.container.database.engine.connect() as connection:
+        event_types = set(
+            await connection.scalars(text("SELECT event_type FROM security_events"))
+        )
+    assert "admin.created" in event_types
+    assert "auth.login_failed" in event_types
+
+    openapi = (await auth_context.client.get("/openapi.json")).json()
+    schemes = openapi["components"]["securitySchemes"]
+    assert schemes["BearerAuth"]["scheme"] == "bearer"
+    assert schemes["AccessCookie"]["in"] == "cookie"
+
+
+async def test_revoke_all_sessions_invalidates_every_access_token(
+    auth_context: AuthTestContext,
+) -> None:
+    with pytest.raises(ConflictError):
+        await auth_context.container.bootstrap_admin.execute(
+            BootstrapAdminCommandDTO(
+                username="SecondAdmin",
+                password="another correct horse password",
+            )
+        )
+
+    access_tokens: list[str] = []
+    for _ in range(2):
+        login = await auth_context.client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": "Admin",
+                "password": "correct horse battery staple",
+                "delivery": "bearer",
+            },
+        )
+        access_tokens.append(login.json()["data"]["access_token"])
+
+    revoke = await auth_context.client.post(
+        "/api/v1/auth/sessions/revoke-all",
+        headers={"Authorization": f"Bearer {access_tokens[-1]}"},
+    )
+
+    assert revoke.status_code == 200
+    assert revoke.json()["data"]["revoked_sessions"] == 2
+    for token in access_tokens:
+        current = await auth_context.client.get(
+            "/api/v1/auth/session",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert current.status_code == 401

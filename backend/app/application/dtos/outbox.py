@@ -5,10 +5,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.application.exceptions import ApplicationValidationError
-
-type JsonScalar = str | int | float | bool | None
-type JsonValue = JsonScalar | list[JsonValue] | dict[str, JsonValue]
-type JsonObject = dict[str, JsonValue]
+from app.shared.json_types import JsonObject
 
 
 def _require_aware(value: datetime, field_name: str) -> None:

@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.dtos.common import PageRequestDTO
 from app.application.dtos.outbox import (
-    JsonObject,
     NewOutboxMessageDTO,
     OutboxCursorDTO,
     OutboxFilterDTO,
@@ -21,6 +20,7 @@ from app.application.dtos.outbox import (
 from app.application.ports.identifiers import IdGenerator
 from app.infrastructure.exceptions import PersistenceError
 from app.infrastructure.persistence.models.outbox import OutboxEventModel
+from app.shared.json_types import JsonObject
 
 
 class SQLAlchemyOutboxRepository:

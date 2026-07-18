@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import Field, PostgresDsn, field_validator, model_validator
+from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,6 +49,41 @@ class Settings(BaseSettings):
     default_page_size: int = Field(default=50, ge=1, le=200)
     max_page_size: int = Field(default=200, ge=1, le=500)
     docs_enabled: bool = True
+    jwt_issuer: str = "drivempvd"
+    jwt_audience: str = "drivempvd-api"
+    jwt_access_secret: SecretStr = SecretStr(
+        "development-access-secret-change-me-32-bytes"
+    )
+    jwt_refresh_secret: SecretStr = SecretStr(
+        "development-refresh-secret-change-me-32-bytes"
+    )
+    auth_secret_pepper: SecretStr = SecretStr(
+        "development-auth-pepper-change-me-32-bytes"
+    )
+    access_token_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    refresh_token_ttl_seconds: int = Field(
+        default=7 * 24 * 60 * 60,
+        ge=3600,
+        le=30 * 24 * 60 * 60,
+    )
+    argon2_time_cost: int = Field(default=3, ge=1, le=10)
+    argon2_memory_cost_kib: int = Field(default=65_536, ge=19_456, le=262_144)
+    argon2_parallelism: int = Field(default=2, ge=1, le=8)
+    minimum_password_length: int = Field(default=12, ge=12, le=128)
+    maximum_failed_logins: int = Field(default=5, ge=2, le=20)
+    account_lock_seconds: int = Field(default=900, ge=60, le=86_400)
+    login_rate_limit: int = Field(default=10, ge=1, le=100)
+    login_rate_window_seconds: int = Field(default=60, ge=10, le=3600)
+    login_rate_block_seconds: int = Field(default=300, ge=10, le=86_400)
+    refresh_rate_limit: int = Field(default=30, ge=1, le=300)
+    refresh_rate_window_seconds: int = Field(default=60, ge=10, le=3600)
+    refresh_rate_block_seconds: int = Field(default=300, ge=10, le=86_400)
+    auth_cookie_secure: bool = True
+    auth_cookie_domain: str | None = None
+    access_cookie_name: str = "drivempvd_access"
+    refresh_cookie_name: str = "drivempvd_refresh"
+    csrf_cookie_name: str = "drivempvd_csrf"
+    csrf_header_name: str = "X-CSRF-Token"
 
     @field_validator("api_prefix")
     @classmethod
@@ -74,6 +109,17 @@ class Settings(BaseSettings):
         if self.default_page_size > self.max_page_size:
             msg = "default_page_size must not exceed max_page_size"
             raise ValueError(msg)
+        if self.environment is AppEnvironment.PRODUCTION:
+            secrets = (
+                self.jwt_access_secret.get_secret_value(),
+                self.jwt_refresh_secret.get_secret_value(),
+                self.auth_secret_pepper.get_secret_value(),
+            )
+            if any(
+                "change-me" in secret or len(secret) < 32 for secret in secrets
+            ) or len(set(secrets)) != len(secrets):
+                msg = "production authentication secrets must be unique strong values"
+                raise ValueError(msg)
         return self
 
 

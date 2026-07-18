@@ -67,7 +67,7 @@ async def test_migration_targets_postgresql_16_and_creates_documented_indexes(
         )
 
     assert str(version).startswith("16.")
-    assert revision == "20260718_0001"
+    assert revision == "20260718_0002"
     assert set(indexes) == {
         "pk_outbox_events",
         "ix_outbox_events_pending_created_id",

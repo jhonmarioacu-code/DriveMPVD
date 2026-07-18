@@ -39,3 +39,32 @@ def test_settings_reject_invalid_api_prefix(api_prefix: str) -> None:
 def test_settings_reject_default_page_larger_than_maximum() -> None:
     with pytest.raises(ValidationError):
         Settings(default_page_size=100, max_page_size=50)
+
+
+def test_production_rejects_default_duplicate_or_short_auth_secrets() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            environment=AppEnvironment.PRODUCTION,
+            storage_root=Path.cwd().anchor,
+        )
+
+    with pytest.raises(ValidationError):
+        Settings(
+            environment=AppEnvironment.PRODUCTION,
+            storage_root=Path.cwd().anchor,
+            jwt_access_secret="x" * 40,
+            jwt_refresh_secret="x" * 40,
+            auth_secret_pepper="z" * 40,
+        )
+
+
+def test_production_accepts_three_independent_strong_auth_secrets() -> None:
+    settings = Settings(
+        environment=AppEnvironment.PRODUCTION,
+        storage_root=Path.cwd().anchor,
+        jwt_access_secret="a" * 40,
+        jwt_refresh_secret="b" * 40,
+        auth_secret_pepper="c" * 40,
+    )
+
+    assert settings.environment is AppEnvironment.PRODUCTION

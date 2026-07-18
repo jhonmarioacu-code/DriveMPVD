@@ -53,3 +53,16 @@ async def clean_outbox(database: Database) -> AsyncIterator[None]:
     yield
     async with database.engine.begin() as connection:
         await connection.execute(text("TRUNCATE TABLE outbox_events"))
+
+
+@pytest.fixture
+async def clean_auth(database: Database) -> AsyncIterator[None]:
+    statement = text(
+        "TRUNCATE TABLE security_events, auth_sessions, auth_rate_limits, "
+        "admin_accounts CASCADE"
+    )
+    async with database.engine.begin() as connection:
+        await connection.execute(statement)
+    yield
+    async with database.engine.begin() as connection:
+        await connection.execute(statement)

@@ -40,3 +40,55 @@ class DependencyUnavailableError(ApplicationError):
 
     code = "application.dependency_unavailable"
     default_message = "A required service is temporarily unavailable."
+
+
+class AuthenticationError(ApplicationError):
+    """Credentials or authentication proof are invalid."""
+
+    code = "auth.invalid_credentials"
+    default_message = "Authentication failed."
+
+
+class AuthenticationRequiredError(ApplicationError):
+    """A protected operation has no valid administrator principal."""
+
+    code = "auth.authentication_required"
+    default_message = "Authentication is required."
+
+
+class CsrfValidationError(ApplicationError):
+    """Cookie-authenticated mutation lacks valid CSRF proof."""
+
+    code = "auth.csrf_validation_failed"
+    default_message = "CSRF validation failed."
+
+
+class AccountDisabledError(ApplicationError):
+    """The singleton administrator account is disabled."""
+
+    code = "auth.account_disabled"
+    default_message = "The administrator account is disabled."
+
+
+class RateLimitExceededError(ApplicationError):
+    """A security-sensitive endpoint exceeded its configured rate."""
+
+    code = "auth.rate_limit_exceeded"
+    default_message = "Too many authentication attempts. Try again later."
+
+    def __init__(self, *, retry_after_seconds: int) -> None:
+        self.retry_after_seconds = max(1, retry_after_seconds)
+        super().__init__()
+
+
+class AccountTemporarilyLockedError(RateLimitExceededError):
+    """Credential failures temporarily locked the administrator account."""
+
+    code = "auth.account_temporarily_locked"
+
+
+class SessionRevokedError(AuthenticationError):
+    """The referenced session has expired or was revoked."""
+
+    code = "auth.session_revoked"
+    default_message = "The authentication session is no longer valid."
