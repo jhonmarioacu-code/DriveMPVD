@@ -12,9 +12,9 @@ en la Fase 1.
 | Lista, cuadrícula, breadcrumb y menú | App shell/features virtualizadas | 3 y 5 |
 | Subir archivos/carpetas y drag-and-drop | API reanudable; carpetas/UI futuras | 2.6 subida de archivo implementada |
 | Archivos de hasta 50 GB | Streaming, offsets, SHA-256 y publicación atómica | 2.6 implementado |
-| Descargar/abrir | Autorización + entrega interna Nginx | 5 y 8 |
+| Descargar/abrir | Streaming RFC 9110; estrategia Nginx preparada | 2.7 implementado |
 | Imágenes con zoom/rotación/fullscreen | Feature `previews` | 7 |
-| Video y música | HTML5, Range y playlist acotada | 7 y 8 |
+| Video y música | Range implementado; reproductores futuros | 2.7 backend; 7 frontend |
 | PDF integrado | Visor lazy con rangos | 7 y 8 |
 | Miniaturas imagen/video/PDF | `MediaAsset` + worker durable | 7 |
 | Word/Excel/PowerPoint/TXT/ZIP/RAR/7Z | Clasificación MIME/extensión e iconos | 5 |

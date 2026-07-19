@@ -49,15 +49,14 @@ sesiones expiran y un job limpia staging antiguo.
 
 ## Descargas y streaming
 
-FastAPI valida sesión, estado y permisos implícitos; luego responde con
-`X-Accel-Redirect` hacia una ubicación Nginx `internal`. Nginx entrega el blob
-con zero-copy cuando el sistema lo permita y gestiona rangos sin cargarlo en
-Python.
+FastAPI valida sesión, versión, estado y existencia física antes de iniciar el
+stream. La entrega actual usa iteradores asíncronos con memoria acotada. Una
+estrategia inyectada permite sustituirla posteriormente por `X-Accel-Redirect`
+hacia una ubicación Nginx `internal`.
 
-Los nombres solo se usan en `Content-Disposition` con codificación segura. El
-cache privado y ETag se basan en identidad/revisión del blob. La reproducción
-de audio y video solicita rangos; abrir un PDF no descarga anticipadamente el
-archivo completo si el visor solicita rangos.
+Los nombres solo se usan en `Content-Disposition` UTF-8. El cache es privado y
+el ETag combina checksum, versión y modificación. Se admiten rangos únicos,
+sufijos y respuestas multipart, permitiendo audio, video y PDF incrementales.
 
 ## Miniaturas
 

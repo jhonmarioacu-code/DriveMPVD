@@ -14,3 +14,4 @@ reemplaza conservando el historial.
 - [ADR-0009: Adyacencia y objetos inmutables](0009-storage-adjacency-and-immutable-objects.md)
 - [ADR-0010: Read model HTTP y paginación keyset](0010-storage-http-read-model-and-keyset.md)
 - [ADR-0011: Staging reanudable y publicación atómica](0011-resumable-staging-and-atomic-publish.md)
+- [ADR-0012: Streaming RFC 9110 y estrategia de entrega](0012-rfc9110-streaming-and-delivery-strategy.md)

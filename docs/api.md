@@ -30,6 +30,7 @@ y `request_id`.
 |---|---|
 | Sesión | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/sessions/revoke-all`, `GET /auth/session` |
 | Navegación | `GET /storage/folders/{folder_id}/entries`, `GET /storage/files/{file_id}` |
+| Contenido | `GET/HEAD /storage/files/{file_id}/content` |
 | Carpetas | `POST /storage/folders` |
 | Mutaciones | `PATCH /storage/entries/{id}`, `POST /storage/entries/{id}/move`, `POST /storage/entries/{id}/copy`, `POST /storage/entries/{id}/trash` |
 | Papelera | `POST /storage/trash/{id}/restore`, `DELETE /storage/trash/{id}` |
@@ -39,7 +40,6 @@ y `request_id`.
 
 | Área | Rutas principales |
 |---|---|
-| Descarga | `GET /entries/{id}/content` |
 | Búsqueda | `GET /search` |
 | Actividad | `GET /recents`, `PUT /favorites/{id}`, `DELETE /favorites/{id}`, `GET /favorites` |
 | Papelera | `GET /trash`, `DELETE /trash` |
@@ -73,16 +73,18 @@ paginan incluso sin filtros.
    publica el objeto atómicamente.
 5. `DELETE /storage/uploads/{id}` cancela y elimina staging.
 
-La subida de carpeta se expresa enviando rutas relativas normalizadas como
-metadato por archivo; el servidor crea carpetas de forma idempotente. Cada
-segmento se valida y ninguna ruta se usa como ruta física.
+La subida de carpetas completas se añadirá en un incremento posterior. Ningún
+nombre lógico se utiliza como ruta física.
 
 ## Contenido y Range
 
-`GET /entries/{id}/content` autoriza y registra apertura una sola vez, y delega
-la entrega a una ubicación interna de Nginx. Se soportan `Range`, `If-Range`,
-`ETag`, respuestas `206` y `416`, `Accept-Ranges: bytes`, y disposición
-`inline` para formatos seguros. El cliente nunca recibe una ruta del host.
+`GET /storage/files/{id}/content` autoriza, verifica el objeto y lo transmite
+actualmente mediante FastAPI. Soporta rangos únicos/múltiples, ETag,
+Last-Modified y precondiciones. `HEAD` devuelve los mismos metadatos sin body.
+
+La estrategia de entrega puede devolver en el futuro `X-Accel-Redirect` hacia
+una ubicación Nginx `internal`, sin cambiar el caso de uso. El nombre se envía
+como `attachment` UTF-8 y el cliente nunca recibe una ruta del host.
 
 ## Conflictos y asincronía
 

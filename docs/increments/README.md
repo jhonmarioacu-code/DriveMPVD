@@ -6,3 +6,4 @@
 - [Fase 2.4: dominio de almacenamiento](phase-2-04-storage-domain.md)
 - [Fase 2.5: API REST de almacenamiento](phase-2-05-storage-rest-api.md)
 - [Fase 2.6: subida streaming reanudable](phase-2-06-file-uploads.md)
+- [Fase 2.7: descarga y streaming RFC 9110](phase-2-07-download-streaming.md)
