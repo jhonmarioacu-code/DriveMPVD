@@ -31,6 +31,6 @@ sin modificar dominio ni autorización.
 - `HEAD` y `GET` comparten autorización, precondiciones y cabeceras.
 - Los errores previos al cuerpo conservan el envelope JSON; una falla física
   posterior al inicio del stream solo puede cerrar la conexión.
-- `X-Accel-Redirect` queda preparado pero deshabilitado hasta configurar y
-  probar una ubicación Nginx `internal`.
+- `X-Accel-Redirect` queda preparado pero deshabilitado hasta que un adaptador
+  lo active y se pruebe contra la ubicación Nginx `internal` ya configurada.
 - Las métricas cuentan bytes cedidos al servidor ASGI, no confirmaciones TCP.

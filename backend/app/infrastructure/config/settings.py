@@ -3,7 +3,7 @@
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
 from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,6 +15,18 @@ class AppEnvironment(StrEnum):
     DEVELOPMENT = "development"
     TEST = "test"
     PRODUCTION = "production"
+
+
+_INSECURE_PRODUCTION_SECRET_MARKERS: Final = (
+    "change-me",
+    "development-",
+    "replace-",
+)
+
+
+def _contains_insecure_placeholder(value: str) -> bool:
+    normalized = value.casefold()
+    return any(marker in normalized for marker in _INSECURE_PRODUCTION_SECRET_MARKERS)
 
 
 class Settings(BaseSettings):
@@ -135,9 +147,16 @@ class Settings(BaseSettings):
                 self.auth_secret_pepper.get_secret_value(),
             )
             if any(
-                "change-me" in secret or len(secret) < 32 for secret in secrets
+                len(secret) < 32 or _contains_insecure_placeholder(secret)
+                for secret in secrets
             ) or len(set(secrets)) != len(secrets):
                 msg = "production authentication secrets must be unique strong values"
+                raise ValueError(msg)
+            if _contains_insecure_placeholder(self.database_url.unicode_string()):
+                msg = "production database URL must not contain an example placeholder"
+                raise ValueError(msg)
+            if not self.auth_cookie_secure:
+                msg = "production authentication cookies must be Secure"
                 raise ValueError(msg)
         return self
 

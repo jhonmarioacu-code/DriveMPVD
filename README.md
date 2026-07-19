@@ -8,7 +8,9 @@ DDD, FastAPI y PostgreSQL en el backend, y React en el frontend.
 
 La arquitectura, el backend hasta el incremento 2.7, la base del frontend, la
 autenticación web, el explorador, las subidas reanudables y la visualización de
-archivos están terminados.
+archivos están terminados. La infraestructura de contenedores y Nginx está
+implementada; falta ejecutarla una vez en un host con Docker Compose para cerrar
+su validación operativa.
 
 | Fase | Alcance                                           | Estado                          |
 | ---- | ------------------------------------------------- | ------------------------------- |
@@ -19,7 +21,7 @@ archivos están terminados.
 | 5    | Explorador de archivos                            | Terminada                       |
 | 6    | Subidas normales y reanudables                    | Terminada                       |
 | 7    | Visualizadores, miniaturas, streaming y descargas | Terminada                       |
-| 8    | Docker Compose y Nginx                            | Pendiente                       |
+| 8    | Docker Compose y Nginx                            | Implementada; runtime pendiente |
 | 9    | Optimización y operación                          | Pendiente                       |
 | 10   | Pruebas y cobertura final                         | Pendiente                       |
 
@@ -34,7 +36,7 @@ archivos están terminados.
 - [Rendimiento y escalabilidad](docs/performance.md)
 - [Arquitectura del frontend](docs/frontend-architecture.md)
 - [Estrategia de pruebas](docs/testing-strategy.md)
-- [Despliegue y operación previstos](docs/operations.md)
+- [Despliegue y operación](docs/operations.md)
 - [Trazabilidad de requisitos](docs/requirements-traceability.md)
 - [Registro de decisiones](docs/adr/README.md)
 
@@ -66,6 +68,7 @@ detalles del sistema de archivos.
   conserva metadatos, nunca el contenido de los archivos.
 
 Las instrucciones ejecutables de instalación, actualización, copia de
-seguridad, restauración y despliegue se incorporarán cuando existan los
-artefactos reales de contenedor. Su diseño ya está definido en
-[`docs/operations.md`](docs/operations.md).
+seguridad, restauración y despliegue están en
+[`docs/operations.md`](docs/operations.md), junto con el smoke test autenticado
+de Compose. La prueba en un host Docker real sigue siendo el cierre operativo
+del incremento de despliegue.

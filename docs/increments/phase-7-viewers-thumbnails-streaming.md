@@ -49,8 +49,8 @@ puede forzar que el navegador trate como vista previa una respuesta de
 descarga. Las peticiones son de lectura: no requieren CSRF. Al compartir
 origen con la API, los elementos nativos del navegador envían las cookies de
 sesión HttpOnly sin exponer tokens a JavaScript. La respuesta incluye además
-`X-Content-Type-Options: nosniff` para no delegar la seguridad de la entrega
-inline en la futura capa Nginx.
+`X-Content-Type-Options: nosniff`, que la capa Nginx de despliegue también
+refuerza para la entrega inline.
 
 El mismo `GET` conserva `Accept-Ranges`, ETag, Last-Modified, respuestas
 condicionales y rangos únicos o múltiples de RFC 9110. Los elementos

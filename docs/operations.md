@@ -1,72 +1,127 @@
-# Despliegue y operación previstos
+# Despliegue y operación
 
-Este documento fija el diseño operativo. Los comandos exactos se añadirán y se
-probarán cuando Dockerfiles, Compose y migraciones existan; no se ofrecen ahora
-instrucciones que aparenten ser ejecutables.
-
-## Topología Compose
+## Topología implantada
 
 ```text
-Internet -> Nginx -> frontend estático
-                  -> FastAPI /api
-                  -> contenido interno autorizado
-                       |
-                 PostgreSQL
-                       |
-                 media worker
+Internet
+   |
+Nginx (80/443, único puerto publicado)
+   |-- frontend (SPA estática, red edge)
+   `-- api (FastAPI, red private)
+          |-- migrate (Alembic antes del arranque)
+          `-- PostgreSQL 16 (red private, volumen nombrado)
 
-Host: /data/storage -> api/nginx/worker con permisos mínimos diferenciados
-Volúmenes: postgres_data, certificados y configuración/secrets
+Host: /data/storage -> api con UID/GID 10001
 ```
 
-Servicios previstos: `nginx`, `api`, `worker`, `postgres`. API y worker usan la
-misma imagen versionada. PostgreSQL queda en red interna y tendrá healthcheck.
-Nginx es el único servicio con puertos publicados.
+`compose.yaml` usa dos redes: `edge` comunica Nginx con el frontend y
+`private` aísla API, migraciones y PostgreSQL. API, frontend y PostgreSQL no
+publican puertos del host. El servicio `migrate` debe terminar correctamente
+antes de que `api` se inicie.
 
-Las imágenes finales usarán Python 3.13 y PostgreSQL 16. La compilación y las
-pruebas de Compose se ejecutarán para Ubuntu Server 24.04 LTS. Toda configuración
-de runtime entra mediante variables `DRIVEMPVD_*` validadas por `Settings`.
+No existe aún un worker de medios operativo; por eso no se publica un
+contenedor vacío. Cuando se implemente el procesador durable, compartirá la
+imagen de backend y accederá sólo a los volúmenes estrictamente necesarios.
 
-## Instalación
+## Requisitos de Ubuntu Server 24.04
 
-La guía final verificará Ubuntu 24.04, espacio, filesystem, reloj, Docker Engine
-y Compose plugin; creará el usuario de servicio y `/data/storage` con permisos
-restrictivos; instalará secretos; construirá imágenes con versiones fijadas;
-ejecutará migraciones; creará la cuenta administradora mediante entrada segura;
-y validará healthchecks, TLS y subida/descarga de humo.
+- Docker Engine y el plugin Docker Compose v2 actuales.
+- Un DNS que dirija el dominio a la IP del host antes de emitir certificados.
+- Almacenamiento persistente fuera del árbol del repositorio, por defecto
+  `/data/storage`.
+- Un usuario con permisos para ejecutar Docker; los secretos no deben quedar en
+  el historial del shell ni en el repositorio.
 
-## Actualización
+Prepare las rutas persistentes antes de arrancar producción:
 
-Las versiones serán tags inmutables. El procedimiento final incluirá backup,
-pull/build, migración compatible, recreación controlada, smoke tests y rollback
-de imagen. Una migración destructiva requerirá fase de compatibilidad previa;
-no se hará downgrade de base de datos a ciegas.
+```bash
+sudo install -d -m 0750 -o 10001 -g 10001 /data/storage
+sudo install -d -m 0750 /var/lib/drivempvd/acme-webroot
+```
 
-## Backup
-
-Se respaldarán dump/snapshot consistente de PostgreSQL, `objects`, secretos
-necesarios y manifiesto de versiones. Se excluirán staging, derivados y logs.
-La retención y destino deben estar fuera del SSD principal, con cifrado,
-checksums y prueba periódica de restauración.
-
-## Restauración
-
-La restauración se ensayará en un directorio y base aislados: desplegar versión
-compatible, restaurar PostgreSQL y objetos, ejecutar verificador de referencias,
-regenerar derivados, hacer smoke tests y solo entonces cambiar tráfico. El RPO
-y RTO reales se documentarán tras medir el volumen del usuario.
-
-## Mantenimiento
-
-- Alertar por poco disco antes de impedir staging o PostgreSQL.
-- Limpiar sesiones expiradas, staging y blobs huérfanos mediante jobs seguros.
-- Observar autovacuum, crecimiento de índices, backlog y errores de codecs.
-- Rotar logs fuera de los volúmenes de datos.
-- Renovar TLS y rotar secretos con revocación de sesiones cuando aplique.
+La API se ejecuta como UID/GID 10001, con filesystem de contenedor de sólo
+lectura y `/tmp` temporal. PostgreSQL usa el volumen nombrado `postgres_data`.
 
 ## Configuración
 
-Toda configuración tendrá validación al inicio y valores seguros. Rutas,
-orígenes, límites, claves, DSN y parámetros de Argon2 serán explícitos. La app
-fallará al arrancar si usa una clave por defecto, una raíz no confinada o un
-origen inseguro en producción.
+Los ejemplos están en `docker/.env.example` (HTTP local) y
+`docker/.env.production.example` (HTTPS de producción). Copie uno a
+`docker/.env`, restrinja sus permisos y no lo agregue al control de versiones:
+
+```bash
+cp docker/.env.production.example docker/.env
+chmod 600 docker/.env
+```
+
+Los secretos JWT y el pepper deben ser valores independientes de al menos
+32 bytes; `openssl rand -hex 48` produce un valor adecuado. En `production`,
+`Settings` rechaza los marcadores de ejemplo, DSN con `replace-...` y cookies
+sin `Secure`.
+
+`DRIVEMPVD_MAX_UPLOAD_SIZE_BYTES` y
+`DRIVEMPVD_NGINX_CLIENT_MAX_BODY_SIZE` se configuran por separado y deben ser
+coherentes. El valor inicial es 50 GiB. Los nombres de cookies y el prefijo API
+no deben cambiar sin actualizar a la vez el build del frontend.
+
+## Instalación inicial
+
+```bash
+docker compose --env-file docker/.env config
+docker compose --env-file docker/.env up --build --wait -d
+docker compose --env-file docker/.env run --rm api \
+  python -m app.infrastructure.cli.create_admin admin
+docker compose --env-file docker/.env ps
+```
+
+`migrate` ejecuta Alembic sin crear administradores ni contraseñas. El comando
+de bootstrap sigue siendo interactivo para que la contraseña no aparezca en
+argumentos ni logs.
+
+## TLS y cabeceras
+
+Con `DRIVEMPVD_TLS_ENABLED=true`, Nginx exige
+`fullchain.pem` y `privkey.pem` en la ruta montada por
+`DRIVEMPVD_TLS_CERTIFICATES_PATH`. El servidor de puerto 80 sirve
+`/.well-known/acme-challenge/` desde
+`DRIVEMPVD_ACME_WEBROOT_PATH` y redirige el resto a HTTPS. HSTS se emite sólo
+en la respuesta TLS.
+
+Nginx añade CSP con origen propio, `frame-ancestors 'self'`,
+`X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: no-referrer` y Permissions Policy restrictiva. `SAMEORIGIN`
+permite el iframe PDF autenticado de la SPA sin abrir framing por terceros.
+
+## Transferencias grandes
+
+- `client_max_body_size`: 50 GiB inicial, configurable en Nginx.
+- Chunks de subida: `proxy_request_buffering off`, sin archivos temporales de
+  proxy y timeouts de una hora.
+- Descargas y streaming: sin proxy buffering/caché temporal, con cabeceras
+  Range, ETag y condicionales conservadas hacia FastAPI.
+- Límite de conexiones para contenido y rate limits separados para login,
+  refresh y API general.
+
+La ubicación `/_drivempvd_internal_storage/` es `internal`; no tiene volumen
+en la composición normal ni puede solicitarse desde Internet. El overlay
+`docker/compose.accel.yaml` sólo prepara un montaje de lectura para el futuro
+adaptador `X-Accel-Redirect`; la entrega actual permanece deliberadamente en
+FastAPI.
+
+## Validación y mantenimiento
+
+Tras el bootstrap, ejecute el smoke test autenticado:
+
+```bash
+export DRIVEMPVD_SMOKE_USERNAME=admin
+export DRIVEMPVD_SMOKE_PASSWORD='contraseña-creada'
+sh docker/verify-deployment.sh
+```
+
+Comprueba SPA, readiness, login por cookies, CSRF, subida reanudable de un
+chunk, descarga y `Range: bytes=0-3`. En producción con certificado válido,
+ajuste `DRIVEMPVD_SMOKE_BASE_URL=https://drive.ejemplo.com` antes de ejecutarlo.
+
+Para actualización: haga backup de PostgreSQL y `/data/storage`, construya la
+nueva imagen, ejecute `up --build --wait`, revise `migrate`, repita el smoke
+test y conserve la imagen previa para rollback de aplicación. No haga
+downgrade de Alembic ni borre volúmenes sin una restauración ensayada.

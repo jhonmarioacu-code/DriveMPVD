@@ -58,6 +58,45 @@ def test_production_rejects_default_duplicate_or_short_auth_secrets() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "placeholder",
+    [
+        "replace-with-a-unique-32-byte-access-secret",
+        "development-access-secret-change-me-32-bytes",
+    ],
+)
+def test_production_rejects_example_auth_secrets(placeholder: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            environment=AppEnvironment.PRODUCTION,
+            storage_root=Path.cwd().anchor,
+            jwt_access_secret=placeholder,
+            jwt_refresh_secret="b" * 40,
+            auth_secret_pepper="c" * 40,
+        )
+
+
+def test_production_rejects_example_database_url_and_insecure_cookies() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            environment=AppEnvironment.PRODUCTION,
+            storage_root=Path.cwd().anchor,
+            jwt_access_secret="a" * 40,
+            jwt_refresh_secret="b" * 40,
+            auth_secret_pepper="c" * 40,
+            database_url="postgresql+asyncpg://drivempvd:replace-with-password@postgres:5432/drivempvd",
+        )
+    with pytest.raises(ValidationError):
+        Settings(
+            environment=AppEnvironment.PRODUCTION,
+            storage_root=Path.cwd().anchor,
+            jwt_access_secret="a" * 40,
+            jwt_refresh_secret="b" * 40,
+            auth_secret_pepper="c" * 40,
+            auth_cookie_secure=False,
+        )
+
+
 def test_production_accepts_three_independent_strong_auth_secrets() -> None:
     settings = Settings(
         environment=AppEnvironment.PRODUCTION,
@@ -65,6 +104,7 @@ def test_production_accepts_three_independent_strong_auth_secrets() -> None:
         jwt_access_secret="a" * 40,
         jwt_refresh_secret="b" * 40,
         auth_secret_pepper="c" * 40,
+        database_url="postgresql+asyncpg://drivempvd:database-password@postgres:5432/drivempvd",
     )
 
     assert settings.environment is AppEnvironment.PRODUCTION

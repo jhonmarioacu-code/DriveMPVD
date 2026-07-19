@@ -49,10 +49,12 @@ sintéticos de escala objetivo antes de fijarlos en migraciones.
 
 ## Servidor objetivo
 
-En 4 vCPU/16 GB se comienza con un proceso API asíncrono y un worker con
-concurrencia conservadora; FFmpeg/render de PDF se limitan por semáforo. Nginx
-sirve el contenido pesado. PostgreSQL recibe memoria reservada y no compite sin
-límites con procesos multimedia.
+En 4 vCPU/16 GB se comienza con un proceso API asíncrono; el worker de medios
+se añadirá cuando exista un ejecutor real y sus FFmpeg/renderizadores se
+limitarán por semáforo. Nginx ya reenvía contenido sin buffering, mientras que
+FastAPI conserva la entrega autorizada hasta habilitar un adaptador
+`X-Accel-Redirect`. PostgreSQL recibe memoria reservada y no compite sin límites
+con procesos multimedia.
 
 ## Validación prevista
 

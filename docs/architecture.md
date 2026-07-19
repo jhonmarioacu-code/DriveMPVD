@@ -54,14 +54,14 @@ secretos o valores de producción incrustados en código.
 
 ## Módulos
 
-| Módulo | Responsabilidad | No conoce |
-|---|---|---|
-| `catalog` | Árbol lógico, metadatos, crear, renombrar, mover, copiar y papelera | Rutas físicas y HTTP |
-| `transfers` | Sesiones de subida, offsets, finalización y descargas vía `FileStorageProvider` | FastAPI y nombres físicos |
-| `media` | Detección, miniaturas, previews y derivados | Credenciales y navegación UI |
-| `identity` | Cuenta única, login, sesiones, JWT y CSRF | Catálogo de archivos |
-| `activity` | Favoritos, aperturas recientes y auditoría relevante | Implementación del reproductor |
-| `jobs` | Contrato transversal de trabajos durables | Reglas particulares de cada job |
+| Módulo      | Responsabilidad                                                                 | No conoce                       |
+| ----------- | ------------------------------------------------------------------------------- | ------------------------------- |
+| `catalog`   | Árbol lógico, metadatos, crear, renombrar, mover, copiar y papelera             | Rutas físicas y HTTP            |
+| `transfers` | Sesiones de subida, offsets, finalización y descargas vía `FileStorageProvider` | FastAPI y nombres físicos       |
+| `media`     | Detección, miniaturas, previews y derivados                                     | Credenciales y navegación UI    |
+| `identity`  | Cuenta única, login, sesiones, JWT y CSRF                                       | Catálogo de archivos            |
+| `activity`  | Favoritos, aperturas recientes y auditoría relevante                            | Implementación del reproductor  |
+| `jobs`      | Contrato transversal de trabajos durables                                       | Reglas particulares de cada job |
 
 Las futuras capacidades (`tags`, `sharing`, `versions`, `antivirus`, `search`
 de contenido y `sync`) serán módulos nuevos. No se anticiparán con columnas
@@ -80,15 +80,24 @@ proyecciones de lectura y no reconstruyen aggregates cuando no hace falta.
 
 ## Procesos de ejecución
 
-- `nginx`: TLS, límites de tamaño/tasa, estáticos del frontend y entrega
-  autorizada de blobs mediante `X-Accel-Redirect`.
-- `api`: FastAPI asíncrono, operaciones rápidas y creación de jobs.
-- `worker`: misma imagen de backend, proceso independiente que reclama jobs con
-  `FOR UPDATE SKIP LOCKED` para copias grandes, miniaturas y derivados.
-- `postgres`: metadatos, sesiones, cola durable y coordinación.
+- `nginx`: único borde público; termina TLS, aplica límites y cabeceras, sirve
+  el fallback de la SPA mediante el contenedor de frontend y reenvía `/api`.
+- `frontend`: artefactos estáticos creados por Vite, accesibles únicamente desde
+  la red `edge` de Nginx.
+- `api`: FastAPI asíncrono, operaciones rápidas y creación de jobs, aislado en
+  la red privada junto con las migraciones.
+- `migrate`: ejecución única de `alembic upgrade head` antes de iniciar la API.
+- `postgres`: metadatos, sesiones, cola durable y coordinación; no publica un
+  puerto en el host.
 
-No se requiere un broker adicional en el servidor inicial. El worker puede
-escalar de forma independiente más adelante.
+La composición normal conserva la entrega de blobs en FastAPI. La ubicación
+Nginx `internal` y el overlay de sólo lectura para `X-Accel-Redirect` están
+preparados, pero permanecen sin activar hasta que exista un adaptador de
+entrega que preserve autorización, `HEAD`, ETag y rangos RFC 9110.
+
+No se requiere un broker adicional en el servidor inicial ni se declara un
+worker vacío. Cuando exista un ejecutor de jobs real, podrá usar la misma imagen
+de backend y escalar de forma independiente.
 
 ## Consistencia y transacciones
 

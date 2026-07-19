@@ -27,13 +27,15 @@ entorno protegidas. Nunca se incluyen valores reales en Git ni imágenes.
 
 ## CSRF y navegador
 
-Toda mutación exige token CSRF ligado a la sesión en cabecera y valida
-`Origin`/`Host`. CORS queda deshabilitado por defecto porque frontend y API
-comparten origen. Las peticiones simples no modifican estado.
+Toda mutación autenticada por cookie exige un token CSRF ligado a la sesión en
+cabecera. CORS queda deshabilitado porque frontend y API comparten origen; las
+peticiones simples no modifican estado.
 
-Cabeceras mínimas en Nginx: HSTS tras habilitar TLS, CSP restrictiva,
-`X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, permisos del
-navegador restringidos y protección de framing con CSP `frame-ancestors`.
+Nginx emite una CSP de mismo origen, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: no-referrer`, Permissions Policy restrictiva y
+`frame-ancestors 'self'`. También emite `X-Frame-Options: SAMEORIGIN`, que
+permite el iframe PDF autenticado de la SPA sin permitir framing por terceros.
+HSTS sólo se añade por el servidor TLS; no se envía en HTTP local.
 
 ## Rate limiting
 
@@ -55,8 +57,8 @@ configuran separados para no interrumpir reproducción válida.
   metadatos. Una subida que excede 50 GB se cancela y elimina de staging.
 - MIME declarado es informativo; el servidor detecta contenido y sirve tipos
   peligrosos como adjunto. SVG/HTML no se muestran inline en el origen principal.
-- La entrega de bytes actual fija `X-Content-Type-Options: nosniff`; Nginx la
-  reforzará junto con el resto de cabeceras de producción en la Fase 8.
+- La entrega de bytes fija `X-Content-Type-Options: nosniff`; Nginx la refuerza
+  junto con el resto de cabeceras de borde.
 - ZIP, RAR y 7Z se tratan como blobs; no se extraen automáticamente.
 
 El escaneo ClamAV será un módulo posterior. Hasta entonces no se ejecuta
@@ -73,10 +75,14 @@ actual de placeholders no ejecuta ni procesa contenido subido en el cliente.
 
 ## Contenedores y host
 
-- Procesos sin root, filesystem de contenedor de solo lectura cuando sea viable.
-- PostgreSQL no se publica a Internet; red interna de Compose.
-- Nginx es el único puerto público. TLS moderno y certificados renovables.
-- `/data/storage` se monta solo donde sea imprescindible; el frontend no lo ve.
+- API y frontend usan usuarios no privilegiados y filesystem de contenedor de
+  solo lectura; Nginx conserva sólo los privilegios necesarios para escuchar
+  80/443 y baja sus workers.
+- PostgreSQL no se publica a Internet y la red `private` de Compose es interna.
+- Nginx es el único servicio con puertos publicados. TLS requiere certificados
+  renovables montados desde el host.
+- `/data/storage` se monta sólo en API; el frontend no lo ve y Nginx no lo
+  monta en la composición normal.
 - Backups se cifran y se prueba su restauración.
 
 Antes del despliegue público se ejecutará una lista de comprobación OWASP ASVS

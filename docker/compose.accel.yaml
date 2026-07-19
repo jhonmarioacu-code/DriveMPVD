@@ -1,0 +1,10 @@
+# Optional preparation for a future Nginx X-Accel-Redirect delivery adapter.
+# The current backend remains on application streaming, so include this file
+# only once that adapter is explicitly enabled and Range behavior is verified.
+services:
+  nginx:
+    volumes:
+      - type: bind
+        source: ${DRIVEMPVD_STORAGE_PATH:?Define DRIVEMPVD_STORAGE_PATH in docker/.env}
+        target: /data/storage
+        read_only: true

@@ -43,16 +43,18 @@ confirma el offset después de persistir bytes y metadatos. No ensambla chunks
 en RAM. Al finalizar recorre staging por streaming para SHA-256 y MIME, y mueve
 el archivo con `os.replace`.
 
-Nginx usará `proxy_request_buffering off` solo en la ruta de chunks, con timeout
-y límites apropiados. La API leerá el body como stream con backpressure. Las
-sesiones expiran y un job limpia staging antiguo.
+Nginx aplica `proxy_request_buffering off` sólo a la ruta de chunks, con
+timeouts de una hora y límites configurables. La API lee el body como stream
+con backpressure. Las sesiones expiran y un job limpia staging antiguo.
 
 ## Descargas y streaming
 
 FastAPI valida sesión, versión, estado y existencia física antes de iniciar el
 stream. La entrega actual usa iteradores asíncronos con memoria acotada. Una
 estrategia inyectada permite sustituirla posteriormente por `X-Accel-Redirect`
-hacia una ubicación Nginx `internal`.
+hacia una ubicación Nginx `internal`; la ubicación y un overlay de montaje de
+sólo lectura ya están preparados, pero no se habilitan hasta validar ese
+adaptador con `HEAD`, ETag, descargas autenticadas y rangos.
 
 Los nombres solo se usan en `Content-Disposition` UTF-8. El cache es privado y
 el ETag combina checksum, versión y modificación. Se admiten rangos únicos,

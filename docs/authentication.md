@@ -8,13 +8,13 @@ invitaciones ni recuperación pública. La cuenta inicial se crea por CLI.
 
 ## Componentes
 
-| Componente | Responsabilidad |
-|---|---|
-| `AdminAccount` | Hash Argon2id, estado, fallos y lockout temporal |
-| `AuthSession` | Familia refresh, HMAC vigente, CSRF, expiración y revocación |
-| `SecurityEvent` | Auditoría append-only con IP/user-agent pseudonimizados |
-| `AuthRateLimit` | Buckets PostgreSQL atómicos por scope/sujeto |
-| Middleware | Extraer Bearer/cookie y delegar en `AuthenticateAccessUseCase` |
+| Componente      | Responsabilidad                                                |
+| --------------- | -------------------------------------------------------------- |
+| `AdminAccount`  | Hash Argon2id, estado, fallos y lockout temporal               |
+| `AuthSession`   | Familia refresh, HMAC vigente, CSRF, expiración y revocación   |
+| `SecurityEvent` | Auditoría append-only con IP/user-agent pseudonimizados        |
+| `AuthRateLimit` | Buckets PostgreSQL atómicos por scope/sujeto                   |
+| Middleware      | Extraer Bearer/cookie y delegar en `AuthenticateAccessUseCase` |
 
 Dominio y aplicación no importan FastAPI, SQLAlchemy, PyJWT ni Argon2. El
 composition root inyecta puertos de criptografía, repositorios, reloj e ids.
@@ -57,7 +57,7 @@ los tokens se devuelven en el envelope y el access se envía con
 Para mutaciones con access cookie, middleware exige cookie y cabecera CSRF; las
 dos deben coincidir con el HMAC de sesión. Refresh valida el mismo mecanismo con
 la refresh cookie. Bearer no depende de cookies y queda exento. CORS permanece
-cerrado y `Origin` será reforzado junto con las cabeceras/Nginx de despliegue.
+cerrado y el despliegue Nginx mantiene frontend y API bajo el mismo origen.
 
 ## Rate limiting y bloqueo
 
@@ -74,17 +74,17 @@ IP o user-agent en claro. Los detalles son cerrados y no contienen secretos.
 
 ## Modelo de amenazas
 
-| Amenaza | Mitigación | Riesgo residual |
-|---|---|---|
-| Credential stuffing | Argon2id, rate limit y lockout | DoS dirigido al singleton |
-| Enumeración | Error uniforme y verificación dummy | Diferencias externas de red |
-| Robo por XSS | Credenciales HttpOnly y CSP prevista | XSS puede actuar como usuario |
-| CSRF | SameSite, doble submit ligado a sesión | Requiere proteger el origen |
-| Robo refresh | Rotación y detección de reuse | El atacante que rota primero causa revocación |
-| Access robado | TTL corto y consulta de revocación | Válido hasta revocar/detectar |
-| Fuerza bruta JWT | Secretos >=32 bytes, algoritmo fijo | Custodia/rotación de secretos |
-| Abuso distribuido | Cuenta lock + bucket por IP/usuario | PostgreSQL no sustituye WAF/Nginx |
-| DB comprometida | Password Argon2 y tokens con HMAC | Sesiones/metadatos quedan expuestos |
+| Amenaza             | Mitigación                             | Riesgo residual                               |
+| ------------------- | -------------------------------------- | --------------------------------------------- |
+| Credential stuffing | Argon2id, rate limit y lockout         | DoS dirigido al singleton                     |
+| Enumeración         | Error uniforme y verificación dummy    | Diferencias externas de red                   |
+| Robo por XSS        | Credenciales HttpOnly y CSP prevista   | XSS puede actuar como usuario                 |
+| CSRF                | SameSite, doble submit ligado a sesión | Requiere proteger el origen                   |
+| Robo refresh        | Rotación y detección de reuse          | El atacante que rota primero causa revocación |
+| Access robado       | TTL corto y consulta de revocación     | Válido hasta revocar/detectar                 |
+| Fuerza bruta JWT    | Secretos >=32 bytes, algoritmo fijo    | Custodia/rotación de secretos                 |
+| Abuso distribuido   | Cuenta lock + bucket por IP/usuario    | PostgreSQL no sustituye WAF/Nginx             |
+| DB comprometida     | Password Argon2 y tokens con HMAC      | Sesiones/metadatos quedan expuestos           |
 
 ## Limitaciones
 

@@ -23,7 +23,7 @@ en la Fase 1.
 | Favoritos y recientes                    | Módulo `activity`                                                                   | 5                                                       |
 | Papelera/restaurar/vaciar                | REST para trash/restore/purge; vaciado futuro                                       | 2.5 parcial implementado                                |
 | Argon2, JWT, CSRF y rate limit           | Cookies HttpOnly, refresh rotatorio, PostgreSQL                                     | 2.3 backend y 4 frontend implementados                  |
-| Headers y validación de subida           | CSRF cliente; Nginx, middleware y value objects                                     | 2.6 backend y 4/6 frontend implementados; 9 despliegue  |
+| Headers y validación de subida           | CSRF cliente; Nginx, middleware y value objects                                     | 2.6 backend, 4/6 frontend y 8 despliegue implementados  |
 | Protección path traversal                | Blob UUID y confinamiento de raíz; el cliente no construye rutas                    | 2.6 backend y 6 frontend implementados                  |
 | Solo `/data/storage`                     | Object store local sharded                                                          | 2                                                       |
 | 500k archivos/100k carpetas              | Índices, cursores, queries proyectadas                                              | 2 y 9                                                   |
@@ -32,9 +32,9 @@ en la Fase 1.
 | Atajos de teclado                        | Commands compartidos y control de foco                                              | 5                                                       |
 | 80 % de cobertura                        | Umbral de líneas/ramas y pirámide definida                                          | 10                                                      |
 | Type hints y calidad                     | Type checker, Ruff/Black, ESLint/Prettier                                           | 2 y 3.1 implementados; 10                               |
-| Docker Compose y Nginx                   | Topología de cuatro servicios                                                       | 2–4 y 9                                                 |
-| Ubuntu 24.04                             | Guía y verificación de host                                                         | 9                                                       |
-| Instalar/actualizar/backup/restaurar     | Procedimientos verificables previstos                                               | 9                                                       |
+| Docker Compose y Nginx                   | Cinco servicios, dos redes, TLS y proxy de transferencias                           | 8 implementado; prueba runtime de host pendiente        |
+| Ubuntu 24.04                             | Guía de host, certificados y variables                                              | 8 implementado; verificación de host pendiente          |
+| Instalar/actualizar/backup/restaurar     | Procedimientos operativos y smoke test autenticado                                  | 8 implementado; restauración ensayada pendiente         |
 | Extensibilidad futura                    | Módulos y puertos, sin abstracciones especulativas                                  | Transversal                                             |
 | DI solo en infraestructura               | Composition root único y factories de rutas                                         | 2                                                       |
 | Settings centralizado                    | Variables `DRIVEMPVD_*`, validación fail-fast                                       | 2                                                       |

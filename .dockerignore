@@ -1,0 +1,38 @@
+.git
+.gitignore
+
+# Python build and test artifacts
+**/__pycache__/
+**/*.py[cod]
+backend/.venv/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.mypy_cache/
+backend/.coverage
+backend/htmlcov/
+backend/*.egg-info/
+
+# Node build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.vite/
+
+# Local configuration, secrets and runtime data
+.env
+.env.*
+docker/.env
+data/
+storage/
+uploads/
+docker/certificates/
+docker/acme-webroot/
+*.pem
+*.key
+*.log
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
