@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, status
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.application.dtos.storage import (
     AppendUploadChunkCommandDTO,
@@ -26,6 +27,11 @@ from app.application.dtos.storage import (
     UploadChunkResultDTO,
     UploadSessionDTO,
 )
+from app.application.ports.download_services import (
+    DownloadDeliveryProvider,
+    DownloadMetricsRecorder,
+)
+from app.application.ports.file_storage import FileStorageProvider
 from app.application.use_cases.storage import (
     AppendUploadChunkUseCase,
     CancelUploadUseCase,
@@ -37,20 +43,33 @@ from app.application.use_cases.storage import (
     ListFolderEntriesUseCase,
     MoveEntryUseCase,
     PermanentlyDeleteUseCase,
+    PrepareFileDownloadUseCase,
     RenameEntryUseCase,
     RestoreEntryUseCase,
     StartUploadUseCase,
     TrashEntryUseCase,
 )
 from app.presentation.auth import require_principal
+from app.presentation.file_delivery import (
+    RangeRequestError,
+    base_download_headers,
+    evaluate_preconditions,
+    file_etag,
+    multipart_boundary,
+    multipart_length,
+    parse_ranges,
+    stream_download,
+)
 from app.presentation.http_cache import (
     apply_cache_headers,
     conditional_not_modified,
     metadata_etag,
 )
 from app.presentation.schemas.envelope import (
+    ApiError,
     ApiResponse,
     ErrorResponse,
+    error_response,
     success_response,
 )
 from app.presentation.schemas.storage import (
@@ -99,6 +118,10 @@ class StorageRouteUseCases:
     append_upload_chunk: AppendUploadChunkUseCase
     complete_upload: CompleteUploadUseCase
     cancel_upload: CancelUploadUseCase
+    prepare_download: PrepareFileDownloadUseCase
+    file_storage: FileStorageProvider
+    download_delivery: DownloadDeliveryProvider
+    download_metrics: DownloadMetricsRecorder
 
 
 def create_storage_router(
@@ -516,6 +539,25 @@ def create_storage_router(
             request_id=request.state.request_id,
         )
 
+    @router.get(
+        "/files/{file_id}/content",
+        response_class=StreamingResponse,
+        responses=_download_responses(),
+        summary="Stream file content",
+        openapi_extra=_download_openapi(),
+    )
+    async def download_file(file_id: UUID, request: Request) -> Response:
+        return await _download_response(use_cases, file_id, request, head_only=False)
+
+    @router.head(
+        "/files/{file_id}/content",
+        responses=_download_responses(),
+        summary="Inspect file delivery metadata",
+        openapi_extra=_download_openapi(),
+    )
+    async def inspect_file(file_id: UUID, request: Request) -> Response:
+        return await _download_response(use_cases, file_id, request, head_only=True)
+
     return router
 
 
@@ -612,3 +654,154 @@ def _chunk_openapi(csrf_header_name: str) -> dict[str, Any]:
         },
     }
     return contract
+
+
+async def _download_response(
+    use_cases: StorageRouteUseCases,
+    file_id: UUID,
+    request: Request,
+    *,
+    head_only: bool,
+) -> Response:
+    principal = require_principal(request)
+    file = await use_cases.prepare_download.execute(
+        owner_id=principal.admin_id,
+        file_id=file_id,
+    )
+    etag = file_etag(file)
+    headers = base_download_headers(file, etag=etag)
+    request_headers = {
+        name.casefold(): value for name, value in request.headers.items()
+    }
+    precondition = evaluate_preconditions(
+        method="HEAD" if head_only else "GET",
+        headers=request_headers,
+        etag=etag,
+        last_modified=file.updated_at,
+    )
+    if precondition == status.HTTP_304_NOT_MODIFIED:
+        return Response(status_code=precondition, headers=headers)
+    if precondition == status.HTTP_412_PRECONDITION_FAILED:
+        return _download_error(
+            request,
+            status_code=precondition,
+            code="http.precondition_failed",
+            message="The file precondition failed.",
+            headers=headers,
+        )
+    try:
+        ranges = parse_ranges(request.headers.get("range"), size=file.size)
+    except RangeRequestError:
+        headers["Content-Range"] = f"bytes */{file.size}"
+        return _download_error(
+            request,
+            status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
+            code="http.range_not_satisfiable",
+            message="The requested byte range is not satisfiable.",
+            headers=headers,
+        )
+    response_status = status.HTTP_200_OK
+    boundary: str | None = None
+    media_type = file.mime_type
+    if len(ranges) == 1:
+        selected = ranges[0]
+        response_status = status.HTTP_206_PARTIAL_CONTENT
+        headers["Content-Range"] = f"bytes {selected.start}-{selected.end}/{file.size}"
+        headers["Content-Length"] = str(selected.length)
+    elif len(ranges) > 1:
+        response_status = status.HTTP_206_PARTIAL_CONTENT
+        boundary = multipart_boundary(etag)
+        media_type = f"multipart/byteranges; boundary={boundary}"
+        headers["Content-Length"] = str(
+            multipart_length(
+                ranges,
+                boundary=boundary,
+                mime_type=file.mime_type,
+                total_size=file.size,
+            )
+        )
+    else:
+        headers["Content-Length"] = str(file.size)
+    headers["Content-Type"] = media_type
+    redirect = use_cases.download_delivery.internal_redirect(file.storage_key)
+    if redirect is not None:
+        headers["X-Accel-Redirect"] = redirect.uri
+        return Response(status_code=response_status, headers=headers)
+    if head_only:
+        return Response(status_code=response_status, headers=headers)
+    body = stream_download(
+        storage=use_cases.file_storage,
+        file=file,
+        ranges=ranges,
+        boundary=boundary,
+        metrics=use_cases.download_metrics,
+    )
+    return StreamingResponse(
+        body,
+        status_code=response_status,
+        headers=headers,
+        media_type=None,
+    )
+
+
+def _download_error(
+    request: Request,
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+    headers: dict[str, str],
+) -> JSONResponse:
+    payload = error_response(
+        ApiError(code=code, message=message),
+        request_id=request.state.request_id,
+    )
+    return JSONResponse(
+        status_code=status_code,
+        content=payload.model_dump(mode="json"),
+        headers=headers,
+    )
+
+
+def _download_responses() -> dict[int | str, dict[str, Any]]:
+    return {
+        **_PROTECTED_RESPONSES,
+        200: {"description": "Complete file stream."},
+        206: {"description": "Single or multipart byte range."},
+        304: {"description": "Cached representation is current."},
+        412: {"model": ErrorResponse, "description": "If-Match failed."},
+        416: {"model": ErrorResponse, "description": "Range is not satisfiable."},
+    }
+
+
+def _download_openapi() -> dict[str, Any]:
+    return {
+        "security": _AUTH_SECURITY,
+        "parameters": [
+            {
+                "name": "Range",
+                "in": "header",
+                "required": False,
+                "schema": {"type": "string"},
+                "example": "bytes=0-1048575",
+            },
+            {
+                "name": "If-Match",
+                "in": "header",
+                "required": False,
+                "schema": {"type": "string"},
+            },
+            {
+                "name": "If-None-Match",
+                "in": "header",
+                "required": False,
+                "schema": {"type": "string"},
+            },
+            {
+                "name": "If-Modified-Since",
+                "in": "header",
+                "required": False,
+                "schema": {"type": "string", "format": "http-date"},
+            },
+        ],
+    }

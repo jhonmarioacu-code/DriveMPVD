@@ -169,6 +169,47 @@ async def _create_folder(context: StorageApiContext, name: str) -> dict[str, obj
     return cast(dict[str, object], response.json()["data"])
 
 
+async def _upload_completed_file(
+    context: StorageApiContext,
+    *,
+    filename: str,
+    content: bytes,
+    mime_type: str,
+) -> dict[str, object]:
+    started = await context.client.post(
+        "/api/v1/storage/uploads",
+        headers=context.headers,
+        json={
+            "parent_id": str(context.root_id),
+            "filename": filename,
+            "size": len(content),
+            "mime_type": mime_type,
+        },
+    )
+    assert started.status_code == 201
+    upload_id = started.json()["data"]["id"]
+    offset = 0
+    while offset < len(content):
+        chunk = content[offset : offset + 1024 * 1024]
+        appended = await context.client.patch(
+            f"/api/v1/storage/uploads/{upload_id}",
+            headers={
+                **context.headers,
+                "Upload-Offset": str(offset),
+                "Content-Type": "application/offset+octet-stream",
+            },
+            content=chunk,
+        )
+        assert appended.status_code == 200
+        offset += len(chunk)
+    completed = await context.client.post(
+        f"/api/v1/storage/uploads/{upload_id}/complete",
+        headers=context.headers,
+    )
+    assert completed.status_code == 201
+    return cast(dict[str, object], completed.json()["data"])
+
+
 async def test_storage_routes_require_auth_and_publish_openapi_contract(
     storage_api_context: StorageApiContext,
 ) -> None:
@@ -184,6 +225,7 @@ async def test_storage_routes_require_auth_and_publish_openapi_contract(
     expected = {
         "/api/v1/storage/folders/{folder_id}/entries",
         "/api/v1/storage/files/{file_id}",
+        "/api/v1/storage/files/{file_id}/content",
         "/api/v1/storage/folders",
         "/api/v1/storage/entries/{entry_id}",
         "/api/v1/storage/entries/{entry_id}/move",
@@ -652,6 +694,150 @@ async def test_upload_rejects_oversized_chunks_incomplete_and_mime_mismatch(
         f"/api/v1/storage/uploads/{upload_id}", headers=context.headers
     )
     assert not list((context.storage_root / "staging").glob("*.part"))
+
+
+async def test_full_download_and_head_return_safe_complete_headers(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    missing_physical = await context.client.get(
+        f"/api/v1/storage/files/{context.file_id}/content",
+        headers=context.headers,
+    )
+    assert missing_physical.status_code == 404
+    assert missing_physical.json()["error"]["code"] == "storage.entry_not_found"
+    content = b"%PDF-1.7\ncomplete streamed download\n%%EOF"
+    file = await _upload_completed_file(
+        context,
+        filename="résumé.pdf",
+        content=content,
+        mime_type="application/pdf",
+    )
+    path = f"/api/v1/storage/files/{file['id']}/content"
+
+    head = await context.client.head(path, headers=context.headers)
+    assert head.status_code == 200
+    assert head.content == b""
+    assert head.headers["Accept-Ranges"] == "bytes"
+    assert head.headers["Content-Length"] == str(len(content))
+    assert head.headers["Content-Type"] == "application/pdf"
+    assert (
+        "filename*=UTF-8''r%C3%A9sum%C3%A9.pdf" in head.headers["Content-Disposition"]
+    )
+
+    downloaded = await context.client.get(path, headers=context.headers)
+    assert downloaded.status_code == 200
+    assert downloaded.content == content
+    assert downloaded.headers["ETag"] == head.headers["ETag"]
+    assert downloaded.headers["Last-Modified"].endswith("GMT")
+    assert downloaded.headers["Cache-Control"].startswith("private")
+
+
+async def test_ranges_multipart_and_conditional_downloads(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    content = b"%PDF-1.7\n0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    file = await _upload_completed_file(
+        context,
+        filename="ranges.pdf",
+        content=content,
+        mime_type="application/pdf",
+    )
+    path = f"/api/v1/storage/files/{file['id']}/content"
+    metadata = await context.client.head(path, headers=context.headers)
+    etag = metadata.headers["ETag"]
+
+    partial = await context.client.get(
+        path,
+        headers={**context.headers, "Range": "bytes=0-3"},
+    )
+    assert partial.status_code == 206
+    assert partial.content == content[:4]
+    assert partial.headers["Content-Range"] == f"bytes 0-3/{len(content)}"
+    assert partial.headers["Content-Length"] == "4"
+    suffix = await context.client.get(
+        path,
+        headers={**context.headers, "Range": "bytes=-5"},
+    )
+    assert suffix.content == content[-5:]
+
+    multipart = await context.client.get(
+        path,
+        headers={**context.headers, "Range": "bytes=0-2,10-13"},
+    )
+    assert multipart.status_code == 206
+    assert multipart.headers["Content-Type"].startswith("multipart/byteranges")
+    assert int(multipart.headers["Content-Length"]) == len(multipart.content)
+    assert f"Content-Range: bytes 0-2/{len(content)}".encode() in multipart.content
+    assert content[:3] in multipart.content
+    assert content[10:14] in multipart.content
+
+    not_modified = await context.client.get(
+        path,
+        headers={**context.headers, "If-None-Match": f"W/{etag}"},
+    )
+    assert not_modified.status_code == 304
+    by_date = await context.client.get(
+        path,
+        headers={
+            **context.headers,
+            "If-Modified-Since": metadata.headers["Last-Modified"],
+        },
+    )
+    assert by_date.status_code == 304
+    failed_match = await context.client.get(
+        path,
+        headers={**context.headers, "If-Match": '"stale"'},
+    )
+    assert failed_match.status_code == 412
+    assert failed_match.json()["error"]["code"] == "http.precondition_failed"
+    matched = await context.client.get(
+        path,
+        headers={**context.headers, "If-Match": etag},
+    )
+    assert matched.status_code == 200
+    unsatisfied = await context.client.get(
+        path,
+        headers={**context.headers, "Range": "bytes=999999-1000000"},
+    )
+    assert unsatisfied.status_code == 416
+    assert unsatisfied.headers["Content-Range"] == f"bytes */{len(content)}"
+    assert unsatisfied.json()["error"]["code"] == "http.range_not_satisfiable"
+
+
+async def test_empty_and_large_files_stream_without_special_buffers(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    empty = await _upload_completed_file(
+        context,
+        filename="empty.txt",
+        content=b"",
+        mime_type="application/octet-stream",
+    )
+    empty_result = await context.client.get(
+        f"/api/v1/storage/files/{empty['id']}/content",
+        headers=context.headers,
+    )
+    assert empty_result.status_code == 200
+    assert empty_result.headers["Content-Length"] == "0"
+    assert empty_result.content == b""
+
+    large_content = b"z" * (3 * 1024 * 1024)
+    large = await _upload_completed_file(
+        context,
+        filename="large-download.txt",
+        content=large_content,
+        mime_type="text/plain",
+    )
+    large_result = await context.client.get(
+        f"/api/v1/storage/files/{large['id']}/content",
+        headers=context.headers,
+    )
+    assert large_result.status_code == 200
+    assert large_result.headers["Content-Length"] == str(len(large_content))
+    assert large_result.content == large_content
 
 
 async def _repeated_content(block: bytes, repetitions: int) -> AsyncIterator[bytes]:

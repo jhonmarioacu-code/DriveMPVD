@@ -89,6 +89,10 @@ def create_application(
         append_upload_chunk=active_container.append_upload_chunk,
         complete_upload=active_container.complete_upload,
         cancel_upload=active_container.cancel_upload,
+        prepare_download=active_container.prepare_file_download,
+        file_storage=active_container.file_storage,
+        download_delivery=active_container.download_delivery,
+        download_metrics=active_container.download_metrics,
     )
     app.add_middleware(
         AuthenticationMiddleware,
