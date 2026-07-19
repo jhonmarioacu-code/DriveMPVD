@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import delete, func, literal, select, tuple_, update
+from sqlalchemy import Integer, delete, func, literal, select, tuple_, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,6 +83,55 @@ class SQLAlchemyStorageRepository:
             for_update=for_update,
         )
         return entry if isinstance(entry, Folder) else None
+
+    async def get_folder_path(
+        self,
+        *,
+        owner_id: UUID,
+        folder_id: UUID | None,
+    ) -> tuple[Folder, ...]:
+        anchor_filters = (
+            (StorageEntryModel.parent_id.is_(None),)
+            if folder_id is None
+            else (StorageEntryModel.id == folder_id,)
+        )
+        ancestors = (
+            select(
+                StorageEntryModel.id,
+                StorageEntryModel.parent_id,
+                literal(0, type_=Integer).label("depth"),
+            )
+            .where(
+                StorageEntryModel.owner_id == owner_id,
+                StorageEntryModel.entry_type == EntryType.FOLDER.value,
+                StorageEntryModel.deleted_at.is_(None),
+                *anchor_filters,
+            )
+            .cte("folder_ancestors", recursive=True)
+        )
+        parent = StorageEntryModel.__table__.alias("folder_parent")
+        ancestors = ancestors.union_all(
+            select(
+                parent.c.id,
+                parent.c.parent_id,
+                ancestors.c.depth + 1,
+            ).join(ancestors, parent.c.id == ancestors.c.parent_id)
+        )
+        statement = (
+            select(StorageEntryModel)
+            .join(ancestors, StorageEntryModel.id == ancestors.c.id)
+            .where(
+                StorageEntryModel.owner_id == owner_id,
+                StorageEntryModel.entry_type == EntryType.FOLDER.value,
+                StorageEntryModel.deleted_at.is_(None),
+            )
+            .order_by(ancestors.c.depth.desc())
+        )
+        try:
+            models = (await self._session.scalars(statement)).all()
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return tuple(cast(Folder, self._to_entry(model, None)) for model in models)
 
     async def logical_path_length(self, folder_id: UUID) -> int:
         ancestors = (

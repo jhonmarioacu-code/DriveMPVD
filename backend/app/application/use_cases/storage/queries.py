@@ -73,6 +73,26 @@ class GetFileDetailsUseCase:
         return file_to_details_dto(entry)
 
 
+class GetFolderNavigationUseCase:
+    def __init__(self, unit_of_work_factory: UnitOfWorkFactory) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+
+    async def execute(
+        self,
+        *,
+        owner_id: UUID,
+        folder_id: UUID | None,
+    ) -> tuple[StorageEntryDTO, ...]:
+        async with self._unit_of_work_factory() as unit_of_work:
+            path = await unit_of_work.storage.get_folder_path(
+                owner_id=owner_id,
+                folder_id=folder_id,
+            )
+        if not path:
+            raise StorageEntryNotFoundError()
+        return tuple(entry_to_dto(folder) for folder in path)
+
+
 def _validate_filters(filters: StorageListFiltersDTO) -> None:
     if filters.minimum_size is not None and filters.minimum_size < 0:
         raise ApplicationValidationError("Minimum size cannot be negative.")

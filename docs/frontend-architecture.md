@@ -39,17 +39,21 @@ preferencias no sensibles se guardan localmente.
 | `trash` | Listado, restauración, borrado definitivo y vaciado |
 | `jobs` | Progreso de operaciones asíncronas y notificaciones |
 
-La feature `auth` quedó implementada en la Fase 4. Mantiene la identidad solo en
-memoria, usa cookies HttpOnly, inyecta CSRF en mutaciones, serializa refresh y
-protege rutas. Las demás features continúan sujetas a sus fases correspondientes.
+Las features `auth` y `explorer` quedaron implementadas en las Fases 4 y 5.
+`auth` mantiene la identidad solo en memoria, usa cookies HttpOnly, inyecta CSRF
+en mutaciones, serializa refresh y protege rutas. `explorer` consulta la raíz y
+los breadcrumbs, pagina hijos mediante cursor, invalida su caché tras mutaciones
+y nunca descarga contenido para mostrar metadatos. Las demás features continúan
+sujetas a sus fases correspondientes.
 
 Cada feature exporta una superficie pública. No se importan internals de otra
 feature; la coordinación ocurre en layouts o mediante contratos de aplicación.
 
 ## Estado y datos
 
-- Estado remoto: cache de queries por carpeta/filtros/cursor, invalidación
-  selectiva y cancelación con `AbortController`.
+- Estado remoto: TanStack Query con cache de navegación por carpeta y páginas
+  por carpeta/filtros/cursor, invalidación tras mutaciones y cancelación con
+  `AbortController`.
 - Estado de UI: selección, menú contextual, modales, vista y preferencias.
 - Estado de transferencias: máquina de estados por archivo, persistida de forma
   local sin guardar credenciales ni bytes.

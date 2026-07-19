@@ -80,10 +80,11 @@ referencien identificadores de archivo o versión, sin cambiar estas reglas.
 
 ## Limitaciones conocidas
 
-- La raíz se crea durante el aprovisionamiento; aún no existe un endpoint de
-  inicialización.
-- No hay listado del explorador, búsqueda ni esquema HTTP; se añadirán después
-  con paginación keyset.
+- La raíz canónica `Drive` se crea atómicamente al aprovisionar el administrador;
+  la migración `20260718_0004` completa administradores existentes que aún no la
+  tengan. No existe endpoint público de inicialización.
+- El explorador usa listado keyset y la navegación HTTP de breadcrumbs. La
+  búsqueda global continúa pendiente.
 - La copia recursiva es transaccional y streaming, pero una carpeta enorme
   mantendría una transacción larga. Antes de habilitarla por API conviene fijar
   un umbral y delegar copias grandes a jobs idempotentes.

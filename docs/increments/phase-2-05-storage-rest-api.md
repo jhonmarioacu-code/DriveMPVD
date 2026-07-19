@@ -18,6 +18,7 @@
 
 | Método | Ruta | Resultado |
 |---|---|---|
+| `GET` | `/api/v1/storage/navigation` | Raíz o breadcrumbs de una carpeta autorizada. |
 | `GET` | `/api/v1/storage/folders/{folder_id}/entries` | Hijos directos paginados. |
 | `GET` | `/api/v1/storage/files/{file_id}` | Metadatos del archivo. |
 | `POST` | `/api/v1/storage/folders` | Crear carpeta. |
@@ -35,14 +36,17 @@ Los órdenes son `name`, `date`, `size` y `type`.
 ## OpenAPI
 
 `GET /openapi.json` genera el contrato completo; `/docs` y `/redoc` lo
-consumen. Contiene los nueve paths, alternativas de seguridad Bearer/cookie,
+consumen. Incluye navegación, alternativas de seguridad Bearer/cookie,
 schemas de petición/respuesta, ejemplos y respuestas de error/304. No se guarda
 una copia JSON estática para evitar divergencias.
 
-## Migraciones
+## Compatibilidad posterior
 
-No se creó una migración. La revisión vigente continúa siendo
-`20260718_0003`; `alembic check` no detectó operaciones nuevas.
+La Fase 5 añadió la revisión `20260718_0004`, que aprovisiona la raíz `Drive`
+para administradores existentes que aún no la tengan. El bootstrap de nuevas
+cuentas la crea en la misma transacción. También añadió
+`GET /storage/navigation` para que el frontend pueda resolver la raíz y los
+breadcrumbs sin inferirlos desde una carpeta conocida.
 
 ## Validación
 
@@ -58,8 +62,8 @@ No se creó una migración. La revisión vigente continúa siendo
 
 ## Riesgos y recomendaciones
 
-- La raíz aún se aprovisiona fuera de la API; debe formalizarse antes del
-  despliegue inicial.
+- La raíz se aprovisiona internamente al crear la cuenta y se completa mediante
+  migración; sigue sin exponerse un endpoint público de inicialización.
 - Los listados son vivos, no snapshots: mutaciones concurrentes pueden cambiar
   la posición de una entrada entre páginas sin producir duplicados por offset.
 - Las copias recursivas siguen siendo síncronas; aplicar el umbral/job definido

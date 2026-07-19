@@ -1,7 +1,8 @@
-import { createBrowserRouter } from "react-router-dom";
+import { Navigate, createBrowserRouter } from "react-router-dom";
 
 import { AppShell } from "@/app/shell/app-shell";
 import { PublicOnlyRoute, RequireAuth } from "@/features/auth";
+import { FileExplorerPage } from "@/features/explorer";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { LoginPage } from "@/pages/login-page";
 import { NotFoundPage } from "@/pages/not-found-page";
@@ -24,7 +25,10 @@ export function createAppRouter() {
           path: "/",
           element: <AppShell />,
           children: [
-            { index: true, element: <DashboardPage /> },
+            { index: true, element: <Navigate replace to="/files" /> },
+            { path: "home", element: <DashboardPage /> },
+            { path: "files", element: <FileExplorerPage /> },
+            { path: "files/:folderId", element: <FileExplorerPage /> },
             { path: "*", element: <NotFoundPage /> },
           ],
         },

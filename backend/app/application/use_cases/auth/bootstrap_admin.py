@@ -15,6 +15,8 @@ from app.application.use_cases.auth.helpers import (
 )
 from app.domain.auth.entities import AdminAccount
 from app.domain.auth.enums import SecurityEventType
+from app.domain.storage.entities import Folder
+from app.domain.storage.value_objects import EntryName
 
 
 class BootstrapAdminUseCase:
@@ -66,6 +68,18 @@ class BootstrapAdminUseCase:
                 updated_at=now,
             )
             await unit_of_work.admin_accounts.add(account)
+            root_name = EntryName.create("Drive")
+            await unit_of_work.storage.add_folder(
+                Folder(
+                    id=self._id_generator.new(),
+                    owner_id=account.id,
+                    parent_id=None,
+                    name=root_name.value,
+                    normalized_name=root_name.normalized,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
             await unit_of_work.security_events.add(
                 create_security_event(
                     self._id_generator,

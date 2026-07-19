@@ -169,6 +169,16 @@ class FolderEntriesData(StorageModel):
     items: tuple[StorageEntryData, ...]
 
 
+class FolderBreadcrumbData(StorageModel):
+    id: UUID
+    name: str
+
+
+class FolderNavigationData(StorageModel):
+    folder: StorageEntryData
+    breadcrumbs: tuple[FolderBreadcrumbData, ...]
+
+
 class FileDetailsData(StorageModel):
     model_config = ConfigDict(
         extra="forbid",

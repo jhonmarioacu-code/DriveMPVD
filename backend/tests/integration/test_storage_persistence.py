@@ -21,7 +21,7 @@ from app.application.dtos.storage import (
     TrashEntryCommandDTO,
 )
 from app.application.exceptions import StorageNameConflictError
-from app.domain.storage.entities import File, FileVersion, Folder, StorageObject
+from app.domain.storage.entities import File, FileVersion, StorageObject
 from app.domain.storage.enums import StorageObjectStatus
 from app.domain.storage.exceptions import InvalidMoveError
 from app.infrastructure.config.settings import AppEnvironment, Settings
@@ -68,22 +68,13 @@ async def storage_context(
             password="correct horse battery staple",
         )
     )
-    now = datetime.now(UTC)
     id_generator = Uuid7Generator()
     async with container.unit_of_work_factory() as unit_of_work:
-        root_id = id_generator.new()
-        await unit_of_work.storage.add_folder(
-            Folder(
-                id=root_id,
-                owner_id=admin.id,
-                parent_id=None,
-                name="Drive",
-                normalized_name="drive",
-                created_at=now,
-                updated_at=now,
-            )
+        path = await unit_of_work.storage.get_folder_path(
+            owner_id=admin.id,
+            folder_id=None,
         )
-        await unit_of_work.commit()
+    root_id = path[-1].id
 
     yield StorageTestContext(container, admin.id, root_id, id_generator)
     await container.database.dispose()

@@ -38,6 +38,7 @@ Las pruebas exigen al menos 80 % de líneas, sentencias, funciones y ramas.
 ```text
 src/
   app/          Providers, router y shell de aplicación
+  features/     Funcionalidades aisladas: auth y explorer
   pages/        Composición de páginas por ruta
   shared/       Cliente API, configuración, UI y utilidades transversales
   styles/       Tokens y estilos globales
@@ -56,5 +57,13 @@ El frontend usa cookies del backend y no almacena JWT, contraseña ni usuario en
 excepción segura de `localhost`; producción siempre debe utilizar HTTPS y
 cookies `Secure`.
 
-El explorador y las transferencias siguen deshabilitados deliberadamente hasta
-que sus incrementos implementen y prueben el comportamiento real.
+## Explorador
+
+La ruta privada predeterminada es `/files`. Resuelve la raíz canónica mediante
+`GET /storage/navigation`, conserva en TanStack Query las rutas y páginas por
+cursor, y permite navegar carpetas, filtrar, ordenar, seleccionar y ejecutar
+crear carpeta, renombrar, mover, enviar a papelera, abrir y descargar. Las
+descargas usan una URL autenticada del backend y no cargan bytes del archivo en
+memoria del navegador.
+
+Subidas, visualizadores y miniaturas pertenecen a fases posteriores.

@@ -39,6 +39,7 @@ from app.application.use_cases.storage import (
     CopyEntryUseCase,
     CreateFolderUseCase,
     GetFileDetailsUseCase,
+    GetFolderNavigationUseCase,
     GetUploadStatusUseCase,
     ListFolderEntriesUseCase,
     MoveEntryUseCase,
@@ -76,8 +77,10 @@ from app.presentation.schemas.storage import (
     CopyEntryInput,
     CreateFolderInput,
     FileDetailsData,
+    FolderBreadcrumbData,
     FolderEntriesData,
     FolderEntriesQuery,
+    FolderNavigationData,
     MoveEntryInput,
     PermanentDeleteData,
     RenameEntryInput,
@@ -104,6 +107,7 @@ _PROTECTED_RESPONSES: dict[int | str, dict[str, Any]] = {
 
 @dataclass(frozen=True, slots=True)
 class StorageRouteUseCases:
+    get_navigation: GetFolderNavigationUseCase
     list_entries: ListFolderEntriesUseCase
     get_file: GetFileDetailsUseCase
     create_folder: CreateFolderUseCase
@@ -130,6 +134,33 @@ def create_storage_router(
     csrf_header_name: str,
 ) -> APIRouter:
     router = APIRouter(prefix="/storage")
+
+    @router.get(
+        "/navigation",
+        response_model=ApiResponse[FolderNavigationData],
+        responses=_PROTECTED_RESPONSES,
+        summary="Resolve the storage root or a folder breadcrumb path",
+        openapi_extra={"security": _AUTH_SECURITY},
+    )
+    async def get_folder_navigation(
+        request: Request,
+        folder_id: Annotated[UUID | None, Query()] = None,
+    ) -> ApiResponse[FolderNavigationData]:
+        principal = require_principal(request)
+        path = await use_cases.get_navigation.execute(
+            owner_id=principal.admin_id,
+            folder_id=folder_id,
+        )
+        folder = path[-1]
+        return success_response(
+            FolderNavigationData(
+                folder=_entry_data(folder),
+                breadcrumbs=tuple(
+                    FolderBreadcrumbData(id=item.id, name=item.name) for item in path
+                ),
+            ),
+            request_id=request.state.request_id,
+        )
 
     @router.get(
         "/folders/{folder_id}/entries",

@@ -29,7 +29,7 @@ y `request_id`.
 | Área | Rutas principales |
 |---|---|
 | Sesión | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/sessions/revoke-all`, `GET /auth/session` |
-| Navegación | `GET /storage/folders/{folder_id}/entries`, `GET /storage/files/{file_id}` |
+| Navegación | `GET /storage/navigation`, `GET /storage/folders/{folder_id}/entries`, `GET /storage/files/{file_id}` |
 | Contenido | `GET/HEAD /storage/files/{file_id}/content` |
 | Carpetas | `POST /storage/folders` |
 | Mutaciones | `PATCH /storage/entries/{id}`, `POST /storage/entries/{id}/move`, `POST /storage/entries/{id}/copy`, `POST /storage/entries/{id}/trash` |
@@ -63,6 +63,11 @@ añade siempre `id` como desempate estable.
 La navegación restringe por carpeta y propietario; acepta nombre, extensión,
 clase de entrada, intervalos de fecha y tamaño. Las consultas se limitan y
 paginan incluso sin filtros.
+
+`GET /storage/navigation` resuelve la raíz canónica del propietario cuando no
+recibe `folder_id`; con `folder_id` devuelve la carpeta autorizada y sus
+ancestros ordenados desde la raíz. Es el contrato de breadcrumb del explorador
+y no entrega el árbol completo.
 
 ## Subida reanudable
 

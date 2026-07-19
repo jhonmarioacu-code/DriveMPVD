@@ -22,6 +22,11 @@ export interface ApiEnvelope<Data> {
   meta: ApiMeta;
 }
 
+export interface ApiResult<Data> {
+  data: Data;
+  meta: ApiMeta;
+}
+
 export class ApiClientError extends Error {
   readonly status: number;
   readonly code: string;
@@ -110,21 +115,22 @@ export class ApiClient {
     init: RequestInit = {},
     options: ApiRequestOptions = {},
   ): Promise<Data> {
-    try {
-      return await this.#request<Data>(path, init, false);
-    } catch (error) {
-      const unauthorizedHandler = this.#unauthorizedHandler;
-      const shouldRefresh =
-        options.retryUnauthorized !== false &&
-        error instanceof ApiClientError &&
-        error.status === 401 &&
-        unauthorizedHandler !== null;
-      if (!shouldRefresh) throw error;
+    const result = await this.#withUnauthorizedRetry(
+      () => this.#request<Data>(path, init, false),
+      options,
+    );
+    return result.data;
+  }
 
-      const refreshed = await unauthorizedHandler();
-      if (!refreshed) throw error;
-      return this.#request<Data>(path, init, false);
-    }
+  requestWithMeta<Data>(
+    path: string,
+    init: RequestInit = {},
+    options: ApiRequestOptions = {},
+  ): Promise<ApiResult<Data>> {
+    return this.#withUnauthorizedRetry(
+      () => this.#request<Data>(path, init, false),
+      options,
+    );
   }
 
   async requestVoid(
@@ -132,8 +138,18 @@ export class ApiClient {
     init: RequestInit = {},
     options: ApiRequestOptions = {},
   ): Promise<void> {
+    await this.#withUnauthorizedRetry(
+      () => this.#request<null>(path, init, true),
+      options,
+    );
+  }
+
+  async #withUnauthorizedRetry<Result>(
+    operation: () => Promise<Result>,
+    options: ApiRequestOptions,
+  ): Promise<Result> {
     try {
-      await this.#request<null>(path, init, true);
+      return await operation();
     } catch (error) {
       const unauthorizedHandler = this.#unauthorizedHandler;
       const shouldRefresh =
@@ -145,7 +161,7 @@ export class ApiClient {
 
       const refreshed = await unauthorizedHandler();
       if (!refreshed) throw error;
-      await this.#request<null>(path, init, true);
+      return operation();
     }
   }
 
@@ -153,7 +169,7 @@ export class ApiClient {
     path: string,
     init: RequestInit,
     allowNullData: boolean,
-  ): Promise<Data> {
+  ): Promise<ApiResult<Data>> {
     const headers = new Headers(init.headers);
     const method = init.method ?? "GET";
     if (!headers.has("Accept")) headers.set("Accept", "application/json");
@@ -214,7 +230,7 @@ export class ApiClient {
       });
     }
 
-    return payload.data as Data;
+    return { data: payload.data as Data, meta: payload.meta };
   }
 }
 

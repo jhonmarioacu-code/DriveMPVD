@@ -10,7 +10,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.application.dtos.auth import BootstrapAdminCommandDTO
-from app.domain.storage.entities import File, FileVersion, Folder, StorageObject
+from app.domain.storage.entities import File, FileVersion, StorageObject
 from app.domain.storage.enums import StorageObjectStatus
 from app.infrastructure.bootstrap import create_application
 from app.infrastructure.config.settings import AppEnvironment, Settings
@@ -92,22 +92,15 @@ async def _seed_storage(
     id_generator: Uuid7Generator,
 ) -> tuple[UUID, UUID]:
     now = datetime.now(UTC)
-    root_id = id_generator.new()
     file_id = id_generator.new()
     object_id = id_generator.new()
     checksum = "c" * 64
     async with container.unit_of_work_factory() as unit_of_work:
-        await unit_of_work.storage.add_folder(
-            Folder(
-                id=root_id,
-                owner_id=owner_id,
-                parent_id=None,
-                name="Drive",
-                normalized_name="drive",
-                created_at=now,
-                updated_at=now,
-            )
+        path = await unit_of_work.storage.get_folder_path(
+            owner_id=owner_id,
+            folder_id=None,
         )
+        root_id = path[-1].id
         await unit_of_work.storage.add_storage_object(
             StorageObject(
                 id=object_id,
@@ -223,6 +216,7 @@ async def test_storage_routes_require_auth_and_publish_openapi_contract(
     schema = (await context.client.get("/openapi.json")).json()
     paths = schema["paths"]
     expected = {
+        "/api/v1/storage/navigation",
         "/api/v1/storage/folders/{folder_id}/entries",
         "/api/v1/storage/files/{file_id}",
         "/api/v1/storage/files/{file_id}/content",
@@ -248,6 +242,53 @@ async def test_storage_routes_require_auth_and_publish_openapi_contract(
     assert (
         "application/offset+octet-stream" in chunk_operation["requestBody"]["content"]
     )
+
+
+async def test_navigation_resolves_provisioned_root_and_folder_breadcrumbs(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    root = await context.client.get(
+        "/api/v1/storage/navigation",
+        headers=context.headers,
+    )
+    assert root.status_code == 200
+    assert root.json()["data"] == {
+        "folder": {
+            "id": str(context.root_id),
+            "parent_id": None,
+            "kind": "folder",
+            "name": "Drive",
+            "size": None,
+            "mime_type": None,
+            "extension": None,
+            "checksum_sha256": None,
+            "current_version_number": None,
+            "created_at": root.json()["data"]["folder"]["created_at"],
+            "updated_at": root.json()["data"]["folder"]["updated_at"],
+        },
+        "breadcrumbs": [{"id": str(context.root_id), "name": "Drive"}],
+    }
+
+    child = await _create_folder(context, "Documents")
+    nested = await context.client.get(
+        "/api/v1/storage/navigation",
+        headers=context.headers,
+        params={"folder_id": str(child["id"])},
+    )
+    assert nested.status_code == 200
+    assert nested.json()["data"]["folder"]["id"] == child["id"]
+    assert nested.json()["data"]["breadcrumbs"] == [
+        {"id": str(context.root_id), "name": "Drive"},
+        {"id": child["id"], "name": "Documents"},
+    ]
+
+    missing = await context.client.get(
+        "/api/v1/storage/navigation",
+        headers=context.headers,
+        params={"folder_id": str(context.file_id)},
+    )
+    assert missing.status_code == 404
 
 
 async def test_list_endpoint_paginates_sorts_filters_and_revalidates_cache(

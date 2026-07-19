@@ -28,6 +28,7 @@ from app.application.use_cases.storage import (
     CopyEntryUseCase,
     CreateFolderUseCase,
     GetFileDetailsUseCase,
+    GetFolderNavigationUseCase,
     GetUploadStatusUseCase,
     ListFolderEntriesUseCase,
     MoveEntryUseCase,
@@ -81,6 +82,7 @@ class ApplicationContainer:
     trash_entry: TrashEntryUseCase
     restore_entry: RestoreEntryUseCase
     permanently_delete: PermanentlyDeleteUseCase
+    get_folder_navigation: GetFolderNavigationUseCase
     list_folder_entries: ListFolderEntriesUseCase
     get_file_details: GetFileDetailsUseCase
     start_upload: StartUploadUseCase
@@ -230,6 +232,7 @@ class ApplicationContainer:
                 id_generator=id_generator,
                 clock=clock,
             ),
+            get_folder_navigation=GetFolderNavigationUseCase(unit_of_work_factory),
             list_folder_entries=ListFolderEntriesUseCase(unit_of_work_factory),
             get_file_details=GetFileDetailsUseCase(unit_of_work_factory),
             start_upload=_build_upload_use_case(

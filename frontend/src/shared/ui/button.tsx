@@ -13,6 +13,7 @@ const buttonVariants = cva(
         secondary:
           "border border-border bg-surface text-foreground hover:bg-surface-raised",
         ghost: "text-muted hover:bg-surface-raised hover:text-foreground",
+        danger: "bg-danger text-white hover:brightness-95",
       },
       size: {
         default: "h-10 px-4",

@@ -12,6 +12,7 @@ from app.application.use_cases.storage.actions import (
 from app.application.use_cases.storage.downloads import PrepareFileDownloadUseCase
 from app.application.use_cases.storage.queries import (
     GetFileDetailsUseCase,
+    GetFolderNavigationUseCase,
     ListFolderEntriesUseCase,
 )
 from app.application.use_cases.storage.uploads import (
@@ -29,6 +30,7 @@ __all__ = [
     "CopyEntryUseCase",
     "CreateFolderUseCase",
     "GetFileDetailsUseCase",
+    "GetFolderNavigationUseCase",
     "GetUploadStatusUseCase",
     "ListFolderEntriesUseCase",
     "MoveEntryUseCase",

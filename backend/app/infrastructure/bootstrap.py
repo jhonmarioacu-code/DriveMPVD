@@ -75,6 +75,7 @@ def create_application(
         revoke_all=active_container.revoke_all_sessions,
     )
     storage_use_cases = StorageRouteUseCases(
+        get_navigation=active_container.get_folder_navigation,
         list_entries=active_container.list_folder_entries,
         get_file=active_container.get_file_details,
         create_folder=active_container.create_folder,

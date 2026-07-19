@@ -138,4 +138,8 @@ async def test_openapi_is_the_source_for_interactive_documentation(
     schema = openapi_response.json()
     health_operation = schema["paths"]["/api/v1/health"]["get"]
     assert health_operation["summary"] == "Check API liveness"
+    navigation_operation = schema["paths"]["/api/v1/storage/navigation"]["get"]
+    assert navigation_operation["summary"] == (
+        "Resolve the storage root or a folder breadcrumb path"
+    )
     assert "ApiResponse_HealthData_" in schema["components"]["schemas"]

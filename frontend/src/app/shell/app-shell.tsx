@@ -10,18 +10,18 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, Outlet } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 
 import { SessionControls } from "@/features/auth/ui/session-controls";
 import { ThemeSwitcher } from "@/shared/ui/theme-switcher";
 import { cn } from "@/shared/utils/cn";
 
 const navigation = [
-  { label: "Inicio", icon: Home, available: true },
-  { label: "Mis archivos", icon: Files, available: false },
-  { label: "Recientes", icon: Clock3, available: false },
-  { label: "Favoritos", icon: FolderHeart, available: false },
-  { label: "Papelera", icon: Trash2, available: false },
+  { label: "Inicio", icon: Home, href: "/home", available: true },
+  { label: "Mis archivos", icon: Files, href: "/files", available: true },
+  { label: "Recientes", icon: Clock3, href: "", available: false },
+  { label: "Favoritos", icon: FolderHeart, href: "", available: false },
+  { label: "Papelera", icon: Trash2, href: "", available: false },
 ] as const;
 
 interface SidebarProps {
@@ -47,13 +47,19 @@ function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
           Biblioteca
         </p>
         <ul className="space-y-1">
-          {navigation.map(({ label, icon: Icon, available }) => (
+          {navigation.map(({ label, icon: Icon, href, available }) => (
             <li key={label}>
               {available ? (
-                <Link className="nav-item nav-item-active" onClick={onNavigate} to="/">
+                <NavLink
+                  className={({ isActive }) =>
+                    cn("nav-item", isActive && "nav-item-active")
+                  }
+                  onClick={onNavigate}
+                  to={href}
+                >
                   <Icon aria-hidden="true" className="size-4.5" />
                   <span>{label}</span>
-                </Link>
+                </NavLink>
               ) : (
                 <span
                   aria-disabled="true"
@@ -73,7 +79,7 @@ function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
       <div className="m-4 rounded-2xl border border-border bg-surface-raised p-4">
         <p className="text-xs font-semibold text-foreground">Sesión protegida</p>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          El explorador se habilitará en su incremento correspondiente.
+          El explorador usa tu sesión segura y mantiene la navegación en caché.
         </p>
       </div>
       {mobile ? <div className="h-2" /> : null}
@@ -145,18 +151,9 @@ export function AppShell() {
               <Menu aria-hidden="true" className="size-5" />
             </button>
 
-            <div className="relative hidden max-w-md flex-1 sm:block">
-              <Search
-                aria-hidden="true"
-                className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted"
-              />
-              <input
-                aria-label="Buscar"
-                className="h-10 w-full rounded-xl border border-border bg-surface px-9 text-sm outline-none placeholder:text-muted focus:border-brand focus:ring-3 focus:ring-brand/12"
-                disabled
-                placeholder="Buscar próximamente…"
-                type="search"
-              />
+            <div className="hidden flex-1 items-center gap-2 text-sm text-muted sm:flex">
+              <Search aria-hidden="true" className="size-4" />
+              <span>Busca y ordena dentro de cada carpeta</span>
             </div>
 
             <div className="ml-auto flex items-center gap-2">

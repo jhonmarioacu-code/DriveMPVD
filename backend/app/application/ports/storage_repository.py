@@ -50,6 +50,13 @@ class StorageRepository(Protocol):
         for_update: bool = False,
     ) -> Folder | None: ...
 
+    async def get_folder_path(
+        self,
+        *,
+        owner_id: UUID,
+        folder_id: UUID | None,
+    ) -> tuple[Folder, ...]: ...
+
     async def logical_path_length(self, folder_id: UUID) -> int: ...
 
     async def list_children(

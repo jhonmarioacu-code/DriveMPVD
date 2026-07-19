@@ -9,6 +9,10 @@ import {
   logoutCurrentSession,
   refreshAccessSession,
 } from "@/features/auth/api/auth-api";
+import {
+  getFolderNavigation,
+  listFolderEntries,
+} from "@/features/explorer/api/explorer-api";
 import { ApiClientError } from "@/shared/api/client";
 import { getHealth } from "@/shared/api/system";
 
@@ -28,6 +32,17 @@ vi.mock("@/shared/api/system", () => ({
   getHealth: vi.fn(),
 }));
 
+vi.mock("@/features/explorer/api/explorer-api", () => ({
+  getFolderNavigation: vi.fn(),
+  listFolderEntries: vi.fn(),
+  getFileDetails: vi.fn(),
+  createFolder: vi.fn(),
+  renameEntry: vi.fn(),
+  moveEntry: vi.fn(),
+  trashEntry: vi.fn(),
+  fileContentUrl: vi.fn((fileId: string) => `/api/v1/storage/files/${fileId}/content`),
+}));
+
 const health = {
   status: "ok",
   service: "DriveMPVD",
@@ -38,6 +53,20 @@ const admin = {
   adminId: "01912345-6789-7abc-8def-0123456789ab",
   sessionId: "01912345-6789-7abc-8def-0123456789ac",
   username: "Admin",
+};
+
+const rootFolder = {
+  id: "01912345-6789-7abc-8def-012345678900",
+  parent_id: null,
+  kind: "folder" as const,
+  name: "Drive",
+  size: null,
+  mime_type: null,
+  extension: null,
+  checksum_sha256: null,
+  current_version_number: null,
+  created_at: "2026-07-18T18:00:00Z",
+  updated_at: "2026-07-18T18:00:00Z",
 };
 
 function authenticationError(status = 401, code = "auth.authentication_required") {
@@ -58,9 +87,20 @@ describe("App", () => {
     vi.mocked(logoutCurrentSession).mockReset().mockResolvedValue(undefined);
     vi.mocked(refreshAccessSession).mockReset().mockResolvedValue(true);
     vi.mocked(getHealth).mockResolvedValue(health);
+    vi.mocked(getFolderNavigation)
+      .mockReset()
+      .mockResolvedValue({
+        folder: rootFolder,
+        breadcrumbs: [{ id: rootFolder.id, name: rootFolder.name }],
+      });
+    vi.mocked(listFolderEntries).mockReset().mockResolvedValue({
+      items: [],
+      nextCursor: null,
+    });
   });
 
   it("renderiza el shell y confirma la conexión con la API", async () => {
+    window.history.replaceState(null, "", "/home");
     render(<App />);
 
     expect(
@@ -124,6 +164,7 @@ describe("App", () => {
         }),
       )
       .mockResolvedValueOnce(health);
+    window.history.replaceState(null, "", "/home");
     render(<App />);
 
     expect(
@@ -141,6 +182,7 @@ describe("App", () => {
         resolveHealth = resolve;
       }),
     );
+    window.history.replaceState(null, "", "/home");
     render(<App />);
 
     expect(await screen.findByText("Comprobando conexión")).toBeInTheDocument();
@@ -157,11 +199,7 @@ describe("App", () => {
       await screen.findByRole("heading", { name: "Esta página no existe" }),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: /Volver al inicio/ }));
-    expect(
-      await screen.findByRole("heading", {
-        name: "Tu espacio personal, preparado para lo que sigue.",
-      }),
-    ).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Drive" })).toBeVisible();
   });
 
   it("redirige al login cuando no existe una sesión", async () => {
