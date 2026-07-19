@@ -20,6 +20,7 @@ _EXTRA_FIELDS: Final[tuple[str, ...]] = (
     "duration_seconds",
     "size_bytes",
     "average_bytes_per_second",
+    "bytes_sent",
 )
 
 

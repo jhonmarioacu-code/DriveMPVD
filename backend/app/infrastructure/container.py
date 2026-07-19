@@ -5,6 +5,10 @@ from dataclasses import dataclass
 from app.application.dtos.auth import AuthPolicyDTO
 from app.application.dtos.storage import UploadPolicyDTO
 from app.application.ports.auth_services import Clock
+from app.application.ports.download_services import (
+    DownloadDeliveryProvider,
+    DownloadMetricsRecorder,
+)
 from app.application.ports.file_storage import FileStorageProvider
 from app.application.ports.identifiers import IdGenerator
 from app.application.ports.unit_of_work import UnitOfWorkFactory
@@ -28,6 +32,7 @@ from app.application.use_cases.storage import (
     ListFolderEntriesUseCase,
     MoveEntryUseCase,
     PermanentlyDeleteUseCase,
+    PrepareFileDownloadUseCase,
     RenameEntryUseCase,
     RestoreEntryUseCase,
     StartUploadUseCase,
@@ -47,6 +52,10 @@ from app.infrastructure.security import (
     SystemClock,
 )
 from app.infrastructure.storage import LocalFileStorageProvider
+from app.infrastructure.storage.delivery import (
+    ApplicationStreamDeliveryProvider,
+    LoggingDownloadMetricsRecorder,
+)
 from app.infrastructure.storage.metrics import LoggingUploadMetricsRecorder
 from app.infrastructure.storage.mime import SignatureMimeDetector
 
@@ -80,6 +89,9 @@ class ApplicationContainer:
     complete_upload: CompleteUploadUseCase
     cancel_upload: CancelUploadUseCase
     file_storage: FileStorageProvider
+    prepare_file_download: PrepareFileDownloadUseCase
+    download_delivery: DownloadDeliveryProvider
+    download_metrics: DownloadMetricsRecorder
 
     @classmethod
     def build(cls, settings: Settings) -> "ApplicationContainer":
@@ -271,6 +283,12 @@ class ApplicationContainer:
                 upload_policy,
             ),
             file_storage=file_storage,
+            prepare_file_download=PrepareFileDownloadUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                storage=file_storage,
+            ),
+            download_delivery=ApplicationStreamDeliveryProvider(),
+            download_metrics=LoggingDownloadMetricsRecorder(),
         )
 
 

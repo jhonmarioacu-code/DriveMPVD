@@ -79,6 +79,10 @@ class FileStorageProvider(Protocol):
         """Stream an object or range without materializing it in memory."""
         ...
 
+    async def stat(self, key: StorageKey) -> StoredObjectDTO | None:
+        """Return physical metadata, or None when the object is absent."""
+        ...
+
     async def delete(self, key: StorageKey) -> None:
         """Delete an object idempotently."""
         ...

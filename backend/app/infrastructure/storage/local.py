@@ -129,6 +129,15 @@ class LocalFileStorageProvider:
     ) -> AsyncIterator[bytes]:
         return self._stream_path(self._key_path(key), byte_range=byte_range)
 
+    async def stat(self, key: StorageKey) -> StoredObjectDTO | None:
+        try:
+            size = await asyncio.to_thread(lambda: self._key_path(key).stat().st_size)
+            return StoredObjectDTO(key=key, size=size)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise FileStorageError() from exc
+
     async def delete(self, key: StorageKey) -> None:
         try:
             await asyncio.to_thread(self._key_path(key).unlink, missing_ok=True)

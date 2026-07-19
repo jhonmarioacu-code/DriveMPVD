@@ -9,6 +9,7 @@ from app.application.use_cases.storage.actions import (
     RestoreEntryUseCase,
     TrashEntryUseCase,
 )
+from app.application.use_cases.storage.downloads import PrepareFileDownloadUseCase
 from app.application.use_cases.storage.queries import (
     GetFileDetailsUseCase,
     ListFolderEntriesUseCase,
@@ -32,6 +33,7 @@ __all__ = [
     "ListFolderEntriesUseCase",
     "MoveEntryUseCase",
     "PermanentlyDeleteUseCase",
+    "PrepareFileDownloadUseCase",
     "RenameEntryUseCase",
     "RestoreEntryUseCase",
     "StartUploadUseCase",

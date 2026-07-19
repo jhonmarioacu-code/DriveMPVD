@@ -6,6 +6,8 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
+from app.application.ports.file_storage import StorageKey
+
 
 class StorageEntryKind(StrEnum):
     FOLDER = "folder"
@@ -155,6 +157,18 @@ class UploadChunkResultDTO:
     offset: int
     received_bytes: int
     chunk_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class FileDownloadDTO:
+    id: UUID
+    storage_key: StorageKey
+    filename: str
+    size: int
+    mime_type: str
+    checksum_sha256: str
+    version_number: int
+    updated_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
