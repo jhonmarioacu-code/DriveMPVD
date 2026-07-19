@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,6 +27,12 @@ vi.mock("@/features/explorer/api/explorer-api", () => ({
   moveEntry: vi.fn(),
   trashEntry: vi.fn(),
   fileContentUrl: vi.fn((fileId: string) => `/content/${fileId}`),
+}));
+
+const uploadsMock = vi.hoisted(() => ({ enqueueFiles: vi.fn() }));
+
+vi.mock("@/features/uploads", () => ({
+  useUploads: () => uploadsMock,
 }));
 
 const root = entry("root", "folder", "Drive", null);
@@ -119,6 +125,7 @@ describe("FileExplorerPage", () => {
     vi.mocked(renameEntry).mockResolvedValue(report);
     vi.mocked(moveEntry).mockResolvedValue(report);
     vi.mocked(trashEntry).mockResolvedValue({ id: report.id });
+    uploadsMock.enqueueFiles.mockReset();
   });
 
   it("lista, pagina, filtra, ordena y navega con breadcrumbs", async () => {
@@ -207,6 +214,44 @@ describe("FileExplorerPage", () => {
     );
     await user.click(within(dialog).getByRole("button", { name: "Descargar" }));
     expect(click).toHaveBeenCalledOnce();
+  });
+
+  it("añade una selección múltiple a la cola de la carpeta abierta", async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await screen.findByRole("heading", { name: "Drive" });
+    const files = [
+      new File(["uno"], "uno.txt", { type: "text/plain" }),
+      new File(["dos"], "dos.txt", { type: "text/plain" }),
+    ];
+
+    await user.upload(screen.getByLabelText("Seleccionar archivos para subir"), files);
+
+    expect(uploadsMock.enqueueFiles).toHaveBeenCalledWith(
+      expect.any(FileList),
+      root.id,
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "2 archivos añadidos a la cola.",
+    );
+  });
+
+  it("acepta archivos arrastrados en la zona de la carpeta abierta", async () => {
+    renderExplorer();
+    await screen.findByRole("heading", { name: "Drive" });
+    const dropZone = screen.getByRole("region", {
+      name: "Subir archivos a esta carpeta",
+    });
+    const files = [new File(["contenido"], "arrastrado.txt", { type: "text/plain" })];
+
+    fireEvent.dragEnter(dropZone);
+    expect(dropZone).toHaveClass("border-brand");
+    fireEvent.drop(dropZone, { dataTransfer: { files } });
+
+    expect(uploadsMock.enqueueFiles).toHaveBeenCalledWith(files, root.id);
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "1 archivo añadido a la cola.",
+    );
   });
 
   it("presenta errores de navegación y permisos de forma recuperable", async () => {

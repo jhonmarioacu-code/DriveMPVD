@@ -10,8 +10,8 @@ en la Fase 1.
 | Crear, renombrar, mover, copiar y borrar | Entidades, commands, UoW y REST | 2.5 API implementada |
 | Carpetas y subcarpetas | Adyacencia, CTE, raíz canónica y listado keyset | 2.5 backend y 5 frontend implementados |
 | Lista, cuadrícula, breadcrumb y menú | App shell, TanStack Query y explorer responsive | 3 y 5 implementados |
-| Subir archivos/carpetas y drag-and-drop | API reanudable; carpetas/UI futuras | 2.6 subida de archivo implementada |
-| Archivos de hasta 50 GB | Streaming, offsets, SHA-256 y publicación atómica | 2.6 implementado |
+| Subir archivos y drag-and-drop | API reanudable; selección múltiple, cola y chunks; carpetas pendientes de contrato | 2.6 backend y 6 frontend implementados |
+| Archivos de hasta 50 GB | Streaming, offsets, SHA-256 y publicación atómica; chunks frontend de 4 MiB | 2.6 backend y 6 frontend implementados |
 | Descargar/abrir | Streaming RFC 9110; estrategia Nginx preparada | 2.7 implementado |
 | Imágenes con zoom/rotación/fullscreen | Feature `previews` | 7 |
 | Video y música | Range implementado; reproductores futuros | 2.7 backend; 7 frontend |
@@ -23,12 +23,12 @@ en la Fase 1.
 | Favoritos y recientes | Módulo `activity` | 5 |
 | Papelera/restaurar/vaciar | REST para trash/restore/purge; vaciado futuro | 2.5 parcial implementado |
 | Argon2, JWT, CSRF y rate limit | Cookies HttpOnly, refresh rotatorio, PostgreSQL | 2.3 backend y 4 frontend implementados |
-| Headers y validación de subida | CSRF cliente; Nginx, middleware y value objects | 4 cliente implementado; 6 y 9 |
-| Protección path traversal | Blob UUID y confinamiento de raíz | 2 y 6 |
+| Headers y validación de subida | CSRF cliente; Nginx, middleware y value objects | 2.6 backend y 4/6 frontend implementados; 9 despliegue |
+| Protección path traversal | Blob UUID y confinamiento de raíz; el cliente no construye rutas | 2.6 backend y 6 frontend implementados |
 | Solo `/data/storage` | Object store local sharded | 2 |
 | 500k archivos/100k carpetas | Índices, cursores, queries proyectadas | 2 y 9 |
 | REST, Swagger y OpenAPI | `/api/v1`, envelope y contrato generado | 2.5 almacenamiento implementado |
-| Responsive, temas y notificaciones | Shell/temas y explorer responsive; feedback avanzado futuro | 3.1 y 5 implementados; 6–7 pendiente |
+| Responsive, temas y notificaciones | Shell/temas, explorer responsive y bandeja de subida | 3.1, 5 y 6 implementados; 7 pendiente |
 | Atajos de teclado | Commands compartidos y control de foco | 5 |
 | 80 % de cobertura | Umbral de líneas/ramas y pirámide definida | 10 |
 | Type hints y calidad | Type checker, Ruff/Black, ESLint/Prettier | 2 y 3.1 implementados; 10 |

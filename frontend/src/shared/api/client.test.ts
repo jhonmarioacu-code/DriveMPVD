@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClient, readBrowserCookie } from "@/shared/api/client";
 
@@ -34,6 +34,85 @@ function errorResponse(
     },
   );
 }
+
+interface UploadResponsePlan {
+  status: number;
+  responseText?: string;
+  headers?: Record<string, string>;
+  event?: "load" | "error";
+  progress?: {
+    loaded: number;
+    total: number;
+    lengthComputable: boolean;
+  };
+}
+
+class UploadXmlHttpRequest {
+  static plans: UploadResponsePlan[] = [];
+  static instances: UploadXmlHttpRequest[] = [];
+
+  status = 0;
+  responseText = "";
+  withCredentials = false;
+  body: unknown = null;
+  readonly requestHeaders = new Map<string, string>();
+  readonly upload: { onprogress: ((event: ProgressEvent) => void) | null } = {
+    onprogress: null,
+  };
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  readonly open = vi.fn<(method: string, url: string) => void>();
+  readonly setRequestHeader = vi.fn((name: string, value: string) => {
+    this.requestHeaders.set(name.toLowerCase(), value);
+  });
+  readonly getResponseHeader = vi.fn(
+    (name: string) => this.#responseHeaders.get(name.toLowerCase()) ?? null,
+  );
+  readonly abort = vi.fn(() => {
+    void Promise.resolve().then(() => this.onabort?.());
+  });
+  readonly send = vi.fn((body: unknown) => {
+    const plan = UploadXmlHttpRequest.plans.shift();
+    if (plan === undefined) throw new Error("No se configuró una respuesta XHR.");
+    this.body = body;
+    this.status = plan.status;
+    this.responseText = plan.responseText ?? "";
+    this.#responseHeaders = new Map(
+      Object.entries(plan.headers ?? {}).map(([name, value]) => [
+        name.toLowerCase(),
+        value,
+      ]),
+    );
+    void Promise.resolve().then(() => {
+      if (plan.progress !== undefined) {
+        this.upload.onprogress?.(plan.progress as ProgressEvent);
+      }
+      if (plan.event === "error") {
+        this.onerror?.();
+        return;
+      }
+      this.onload?.();
+    });
+  });
+  #responseHeaders = new Map<string, string>();
+
+  constructor() {
+    UploadXmlHttpRequest.instances.push(this);
+  }
+}
+
+function installUploadResponses(...plans: UploadResponsePlan[]) {
+  UploadXmlHttpRequest.plans = plans;
+  UploadXmlHttpRequest.instances = [];
+  vi.stubGlobal("XMLHttpRequest", UploadXmlHttpRequest);
+}
+
+afterEach(() => {
+  UploadXmlHttpRequest.plans = [];
+  UploadXmlHttpRequest.instances = [];
+  vi.unstubAllGlobals();
+});
 
 describe("ApiClient", () => {
   it("devuelve los datos del envelope y configura la solicitud", async () => {
@@ -253,5 +332,160 @@ describe("ApiClient", () => {
     await expect(
       new ApiClient("/api/v1", invalidFetch).request("/auth/login"),
     ).rejects.toMatchObject({ retryAfterSeconds: null });
+  });
+
+  it("obtiene cabeceras de respuestas sin cuerpo y mantiene las cookies", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, {
+        status: 204,
+        headers: {
+          "Upload-Offset": "12",
+          "Upload-Length": "20",
+        },
+      }),
+    );
+    const client = new ApiClient("/api/v1", fetchMock);
+
+    const headers = await client.requestHeaders("/storage/uploads/upload-1", {
+      method: "HEAD",
+    });
+
+    expect(headers.get("Upload-Offset")).toBe("12");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/storage/uploads/upload-1",
+      expect.objectContaining({ credentials: "include", method: "HEAD" }),
+    );
+  });
+
+  it("traduce los errores JSON de solicitudes que sólo necesitan cabeceras", async () => {
+    const client = new ApiClient(
+      "/api/v1",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          errorResponse(409, "storage.upload_state_conflict", { "Retry-After": "9" }),
+        ),
+    );
+
+    await expect(
+      client.requestHeaders("/storage/uploads/upload-1"),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "storage.upload_state_conflict",
+      retryAfterSeconds: 9,
+    });
+  });
+
+  it("carga bloques binarios con progreso, CSRF y credenciales", async () => {
+    installUploadResponses({
+      status: 204,
+      headers: { "content-type": "application/json" },
+      responseText: JSON.stringify(successEnvelope({ offset: 3 })),
+      progress: { loaded: 2, total: 0, lengthComputable: false },
+    });
+    document.cookie = "drivempvd_csrf=upload-token; path=/";
+    const progress = vi.fn();
+    const chunk = new Blob(["abc"]);
+    const client = new ApiClient("/api/v1", vi.fn<typeof fetch>());
+
+    await expect(
+      client.requestWithUploadProgress(
+        "/storage/uploads/upload-1",
+        chunk,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/offset+octet-stream",
+            "Upload-Offset": "0",
+          },
+        },
+        { onProgress: progress },
+      ),
+    ).resolves.toEqual({ offset: 3 });
+
+    const request = UploadXmlHttpRequest.instances[0];
+    expect(request?.open).toHaveBeenCalledWith(
+      "PATCH",
+      "/api/v1/storage/uploads/upload-1",
+    );
+    expect(request?.withCredentials).toBe(true);
+    expect(request?.body).toBe(chunk);
+    expect(request?.requestHeaders.get("content-type")).toBe(
+      "application/offset+octet-stream",
+    );
+    expect(request?.requestHeaders.get("upload-offset")).toBe("0");
+    expect(request?.requestHeaders.get("x-csrf-token")).toBe("upload-token");
+    expect(progress).toHaveBeenCalledWith({ loaded: 2, total: chunk.size });
+  });
+
+  it("renueva una vez la sesión si un bloque recibe 401", async () => {
+    installUploadResponses(
+      {
+        status: 401,
+        headers: { "content-type": "application/json" },
+        responseText: JSON.stringify({
+          data: null,
+          error: {
+            code: "auth.authentication_required",
+            message: "Authentication required.",
+            details: [],
+          },
+          meta: { request_id: "upload-unauthorized", next_cursor: null },
+        }),
+      },
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+        responseText: JSON.stringify(successEnvelope({ offset: 3 })),
+      },
+    );
+    const refresh = vi.fn().mockResolvedValue(true);
+    const client = new ApiClient("/api/v1", vi.fn<typeof fetch>());
+    client.setUnauthorizedHandler(refresh);
+
+    await expect(
+      client.requestWithUploadProgress("/storage/uploads/upload-1", new Blob(["abc"]), {
+        method: "PATCH",
+      }),
+    ).resolves.toEqual({ offset: 3 });
+
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(UploadXmlHttpRequest.instances).toHaveLength(2);
+  });
+
+  it("traduce fallos de red y envelopes inválidos al subir bloques", async () => {
+    installUploadResponses({ status: 0, event: "error" });
+    const client = new ApiClient("/api/v1", vi.fn<typeof fetch>());
+
+    await expect(
+      client.requestWithUploadProgress("/storage/uploads/upload-1", new Blob(["abc"]), {
+        method: "PATCH",
+      }),
+    ).rejects.toMatchObject({ code: "client.network_error", status: 0 });
+
+    installUploadResponses({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      responseText: "{",
+    });
+    await expect(
+      client.requestWithUploadProgress("/storage/uploads/upload-1", new Blob(["abc"]), {
+        method: "PATCH",
+      }),
+    ).rejects.toMatchObject({ code: "client.invalid_envelope" });
+  });
+
+  it("rechaza una carga abortada antes de crear la solicitud", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const client = new ApiClient("/api/v1", vi.fn<typeof fetch>());
+
+    await expect(
+      client.requestWithUploadProgress("/storage/uploads/upload-1", new Blob(["abc"]), {
+        method: "PATCH",
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ code: "client.request_aborted", status: 0 });
+    expect(UploadXmlHttpRequest.instances).toHaveLength(0);
   });
 });

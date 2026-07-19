@@ -59,6 +59,15 @@ export interface ApiRequestOptions {
   retryUnauthorized?: boolean;
 }
 
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+}
+
+export interface UploadRequestOptions extends ApiRequestOptions {
+  onProgress?: (progress: UploadProgress) => void;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -133,6 +142,35 @@ export class ApiClient {
     );
   }
 
+  requestWithUploadProgress<Data>(
+    path: string,
+    body: Blob,
+    init: Omit<RequestInit, "body"> = {},
+    options: UploadRequestOptions = {},
+  ): Promise<Data> {
+    return this.#withUnauthorizedRetry(
+      () => this.#upload<Data>(path, body, init, options.onProgress),
+      options,
+    ).then((result) => result.data);
+  }
+
+  requestHeaders(
+    path: string,
+    init: RequestInit = {},
+    options: ApiRequestOptions = {},
+  ): Promise<Headers> {
+    return this.#withUnauthorizedRetry(async () => {
+      const headers = this.#buildHeaders(init);
+      const response = await this.#fetch(joinUrl(this.#baseUrl, path), {
+        ...init,
+        credentials: "include",
+        headers,
+      });
+      if (response.ok) return new Headers(response.headers);
+      return this.#throwResponseError(response);
+    }, options);
+  }
+
   async requestVoid(
     path: string,
     init: RequestInit = {},
@@ -170,18 +208,7 @@ export class ApiClient {
     init: RequestInit,
     allowNullData: boolean,
   ): Promise<ApiResult<Data>> {
-    const headers = new Headers(init.headers);
-    const method = init.method ?? "GET";
-    if (!headers.has("Accept")) headers.set("Accept", "application/json");
-    if (init.body !== undefined && !headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
-    }
-    if (!isSafeMethod(method) && !headers.has(environment.csrfHeaderName)) {
-      const csrfToken = readBrowserCookie(environment.csrfCookieName);
-      if (csrfToken !== null) {
-        headers.set(environment.csrfHeaderName, csrfToken);
-      }
-    }
+    const headers = this.#buildHeaders(init);
 
     const response = await this.#fetch(joinUrl(this.#baseUrl, path), {
       ...init,
@@ -230,6 +257,177 @@ export class ApiClient {
       });
     }
 
+    return { data: payload.data as Data, meta: payload.meta };
+  }
+
+  #buildHeaders(init: RequestInit) {
+    const headers = new Headers(init.headers);
+    const method = init.method ?? "GET";
+    if (!headers.has("Accept")) headers.set("Accept", "application/json");
+    if (init.body !== undefined && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    if (!isSafeMethod(method) && !headers.has(environment.csrfHeaderName)) {
+      const csrfToken = readBrowserCookie(environment.csrfCookieName);
+      if (csrfToken !== null) {
+        headers.set(environment.csrfHeaderName, csrfToken);
+      }
+    }
+    return headers;
+  }
+
+  async #throwResponseError(response: Response): Promise<never> {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      throw new ApiClientError({
+        status: response.status,
+        code: "client.invalid_response",
+        message: "El servidor devolvió una respuesta inesperada.",
+        requestId: response.headers.get("x-request-id"),
+      });
+    }
+    const payload: unknown = await response.json();
+    if (!isApiEnvelope(payload)) {
+      throw new ApiClientError({
+        status: response.status,
+        code: "client.invalid_envelope",
+        message: "La respuesta no cumple el contrato de la API.",
+        requestId: response.headers.get("x-request-id"),
+      });
+    }
+    const error = payload.error;
+    throw new ApiClientError({
+      status: response.status,
+      code: error?.code ?? `http.${String(response.status)}`,
+      message: error?.message ?? "La solicitud no pudo completarse.",
+      details: error?.details ?? [],
+      requestId: payload.meta.request_id,
+      retryAfterSeconds: parseRetryAfter(response.headers.get("retry-after")),
+    });
+  }
+
+  #upload<Data>(
+    path: string,
+    body: Blob,
+    init: Omit<RequestInit, "body">,
+    onProgress: ((progress: UploadProgress) => void) | undefined,
+  ): Promise<ApiResult<Data>> {
+    return new Promise((resolve, reject) => {
+      const signal = init.signal;
+      if (signal?.aborted) {
+        reject(
+          new ApiClientError({
+            status: 0,
+            code: "client.request_aborted",
+            message: "La solicitud fue cancelada.",
+          }),
+        );
+        return;
+      }
+
+      const request = new XMLHttpRequest();
+      const cleanup = () => signal?.removeEventListener("abort", abortRequest);
+      const abortRequest = () => request.abort();
+      const fail = (error: ApiClientError) => {
+        cleanup();
+        reject(error);
+      };
+
+      request.open(init.method ?? "POST", joinUrl(this.#baseUrl, path));
+      request.withCredentials = true;
+      this.#buildHeaders({ ...init, body }).forEach((value, name) => {
+        request.setRequestHeader(name, value);
+      });
+      request.upload.onprogress = (event) => {
+        onProgress?.({
+          loaded: event.loaded,
+          total: event.lengthComputable ? event.total : body.size,
+        });
+      };
+      request.onload = () => {
+        cleanup();
+        try {
+          resolve(this.#parseUploadResponse<Data>(request));
+        } catch (error) {
+          reject(
+            error instanceof Error
+              ? error
+              : new Error("No fue posible procesar la respuesta de subida."),
+          );
+        }
+      };
+      request.onerror = () => {
+        fail(
+          new ApiClientError({
+            status: request.status,
+            code: "client.network_error",
+            message: "No fue posible conectar con el servidor.",
+            requestId: request.getResponseHeader("x-request-id"),
+          }),
+        );
+      };
+      request.onabort = () => {
+        fail(
+          new ApiClientError({
+            status: 0,
+            code: "client.request_aborted",
+            message: "La solicitud fue cancelada.",
+          }),
+        );
+      };
+      signal?.addEventListener("abort", abortRequest, { once: true });
+      request.send(body);
+    });
+  }
+
+  #parseUploadResponse<Data>(request: XMLHttpRequest): ApiResult<Data> {
+    const contentType = request.getResponseHeader("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      throw new ApiClientError({
+        status: request.status,
+        code: "client.invalid_response",
+        message: "El servidor devolvió una respuesta inesperada.",
+        requestId: request.getResponseHeader("x-request-id"),
+      });
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(request.responseText) as unknown;
+    } catch {
+      throw new ApiClientError({
+        status: request.status,
+        code: "client.invalid_envelope",
+        message: "La respuesta no cumple el contrato de la API.",
+        requestId: request.getResponseHeader("x-request-id"),
+      });
+    }
+    if (!isApiEnvelope(payload)) {
+      throw new ApiClientError({
+        status: request.status,
+        code: "client.invalid_envelope",
+        message: "La respuesta no cumple el contrato de la API.",
+        requestId: request.getResponseHeader("x-request-id"),
+      });
+    }
+    if (!(request.status >= 200 && request.status < 300) || payload.error !== null) {
+      const error = payload.error;
+      throw new ApiClientError({
+        status: request.status,
+        code: error?.code ?? `http.${String(request.status)}`,
+        message: error?.message ?? "La solicitud no pudo completarse.",
+        details: error?.details ?? [],
+        requestId: payload.meta.request_id,
+        retryAfterSeconds: parseRetryAfter(request.getResponseHeader("retry-after")),
+      });
+    }
+    if (payload.data === null) {
+      throw new ApiClientError({
+        status: request.status,
+        code: "client.missing_data",
+        message: "La API no devolvió los datos esperados.",
+        requestId: payload.meta.request_id,
+      });
+    }
     return { data: payload.data as Data, meta: payload.meta };
   }
 }

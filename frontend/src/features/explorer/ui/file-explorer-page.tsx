@@ -13,8 +13,9 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Upload,
 } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -27,6 +28,7 @@ import {
   formatModifiedDate,
 } from "@/features/explorer/model/formatters";
 import { downloadFile, openFile } from "@/features/explorer/model/file-actions";
+import { useUploads } from "@/features/uploads";
 import {
   CreateFolderDialog,
   FileDetailsDialog,
@@ -141,6 +143,10 @@ export function FileExplorerPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const [detailsEntry, setDetailsEntry] = useState<StorageEntry | null>(null);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { enqueueFiles } = useUploads();
 
   const navigation = useFolderNavigation(folderId);
   const currentFolderId = navigation.data?.folder.id;
@@ -195,6 +201,23 @@ export function FileExplorerPage() {
   const completeAction = () => {
     setSelectedIds(new Set());
     setActiveDialog(null);
+  };
+
+  const queueFiles = (files: FileList | File[]) => {
+    if (currentFolderId === undefined) {
+      setUploadNotice("Esta carpeta aún no está lista para recibir archivos.");
+      return;
+    }
+    if (files.length === 0) {
+      setUploadNotice(
+        "No se detectaron archivos. El servidor aún no admite subir carpetas completas.",
+      );
+      return;
+    }
+    enqueueFiles(files, currentFolderId);
+    setUploadNotice(
+      `${String(files.length)} archivo${files.length === 1 ? "" : "s"} añadido${files.length === 1 ? "" : "s"} a la cola.`,
+    );
   };
 
   if (navigation.isPending) {
@@ -271,6 +294,26 @@ export function FileExplorerPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <input
+            aria-label="Seleccionar archivos para subir"
+            className="sr-only"
+            multiple
+            onChange={(event) => {
+              queueFiles(event.target.files ?? []);
+              event.target.value = "";
+            }}
+            ref={fileInputRef}
+            type="file"
+          />
+          <Button
+            disabled={currentFolderId === undefined}
+            onClick={() => fileInputRef.current?.click()}
+            size="sm"
+            variant="secondary"
+          >
+            <Upload aria-hidden="true" className="size-4" />
+            Subir archivos
+          </Button>
           <Button onClick={() => setActiveDialog("create")} size="sm">
             <FolderPlus aria-hidden="true" className="size-4" />
             Nueva carpeta
@@ -323,7 +366,59 @@ export function FileExplorerPage() {
         </div>
       </div>
 
-      <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-border bg-surface p-3 sm:flex-row sm:items-center">
+      <section
+        aria-describedby="upload-drop-help"
+        aria-label="Subir archivos a esta carpeta"
+        className={cn(
+          "mt-6 rounded-2xl border border-dashed p-4 transition-colors",
+          isDraggingFiles
+            ? "border-brand bg-brand-soft/50"
+            : "border-border bg-surface-raised/45",
+        )}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setIsDraggingFiles(true);
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget === event.target) setIsDraggingFiles(false);
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDraggingFiles(false);
+          queueFiles(event.dataTransfer.files);
+        }}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+              <Upload aria-hidden="true" className="size-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">Arrastra archivos aquí</p>
+              <p className="mt-1 text-xs leading-5 text-muted" id="upload-drop-help">
+                Puedes seleccionar varios archivos. Las carpetas completas aún no están
+                disponibles en la API.
+              </p>
+            </div>
+          </div>
+          <Button
+            disabled={currentFolderId === undefined}
+            onClick={() => fileInputRef.current?.click()}
+            size="sm"
+            variant="secondary"
+          >
+            Elegir archivos
+          </Button>
+        </div>
+        {uploadNotice !== null ? (
+          <p aria-live="polite" className="mt-3 text-xs text-muted" role="status">
+            {uploadNotice}
+          </p>
+        ) : null}
+      </section>
+
+      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-border bg-surface p-3 sm:flex-row sm:items-center">
         <div className="relative min-w-0 flex-1">
           <Search
             aria-hidden="true"

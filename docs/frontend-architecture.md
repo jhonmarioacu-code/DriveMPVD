@@ -31,7 +31,7 @@ preferencias no sensibles se guardan localmente.
 | `auth` | Estado de sesión, login, logout, refresh y CSRF |
 | `explorer` | Navegación, breadcrumb, selección, orden, lista/cuadrícula |
 | `file-actions` | Crear, renombrar, mover, copiar, eliminar y descargar |
-| `uploads` | Drag-and-drop, carpetas, cola, chunks, pausa/reanudación y progreso |
+| `uploads` | Archivos por selección o drag-and-drop, cola, chunks, reintento/reanudación y progreso |
 | `search` | Consulta con debounce, filtros y resultados paginados |
 | `previews` | Router de preview por tipo, zoom, rotación y fullscreen |
 | `player` | Video HTML5 y reproductor de audio con playlist |
@@ -39,12 +39,14 @@ preferencias no sensibles se guardan localmente.
 | `trash` | Listado, restauración, borrado definitivo y vaciado |
 | `jobs` | Progreso de operaciones asíncronas y notificaciones |
 
-Las features `auth` y `explorer` quedaron implementadas en las Fases 4 y 5.
-`auth` mantiene la identidad solo en memoria, usa cookies HttpOnly, inyecta CSRF
-en mutaciones, serializa refresh y protege rutas. `explorer` consulta la raíz y
-los breadcrumbs, pagina hijos mediante cursor, invalida su caché tras mutaciones
-y nunca descarga contenido para mostrar metadatos. Las demás features continúan
-sujetas a sus fases correspondientes.
+Las features `auth`, `explorer` y `uploads` quedaron implementadas en las Fases
+4, 5 y 6. `auth` mantiene la identidad solo en memoria, usa cookies HttpOnly,
+inyecta CSRF en mutaciones, serializa refresh y protege rutas. `explorer`
+consulta la raíz y los breadcrumbs, pagina hijos mediante cursor, invalida su
+caché tras mutaciones y nunca descarga contenido para mostrar metadatos.
+`uploads` conserva una cola en memoria, usa sesiones y offsets del backend para
+reintentar un archivo seleccionado y refresca la carpeta al publicarlo.
+Las demás features continúan sujetas a sus fases correspondientes.
 
 Cada feature exporta una superficie pública. No se importan internals de otra
 feature; la coordinación ocurre en layouts o mediante contratos de aplicación.
@@ -55,8 +57,9 @@ feature; la coordinación ocurre en layouts o mediante contratos de aplicación.
   por carpeta/filtros/cursor, invalidación tras mutaciones y cancelación con
   `AbortController`.
 - Estado de UI: selección, menú contextual, modales, vista y preferencias.
-- Estado de transferencias: máquina de estados por archivo, persistida de forma
-  local sin guardar credenciales ni bytes.
+- Estado de transferencias: máquina de estados por archivo en memoria, sin
+  guardar credenciales ni bytes. El offset se reconcilia con el servidor al
+  reintentar; una recarga completa no conserva el `File` ni la sesión local.
 - No se almacena el árbol ni archivos completos en memoria.
 
 La búsqueda aplica debounce corto y descarta respuestas obsoletas. El scroll
@@ -89,9 +92,11 @@ crear carpeta, renombrar, copiar/mover, papelera, descargar, búsqueda, cambiar
 vista, seleccionar todo visible y cerrar preview. Los atajos se deshabilitan en
 inputs y respetan convenciones del sistema.
 
-Drag-and-drop distingue archivos, carpetas y movimientos internos. La subida
-de carpetas conserva rutas relativas validadas. Una bandeja muestra progreso en
-bytes, velocidad, error recuperable, pausa, reintento y cancelación.
+Drag-and-drop de archivos se dirige a la carpeta abierta. La API vigente no
+admite carpetas completas ni rutas relativas, por lo que esa selección no se
+ofrece todavía. Una bandeja muestra progreso en bytes, error recuperable,
+reintento y cancelación; la pausa y la persistencia entre recargas requieren un
+incremento posterior.
 
 ## Accesibilidad y temas
 

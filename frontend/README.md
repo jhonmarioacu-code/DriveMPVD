@@ -38,7 +38,7 @@ Las pruebas exigen al menos 80 % de líneas, sentencias, funciones y ramas.
 ```text
 src/
   app/          Providers, router y shell de aplicación
-  features/     Funcionalidades aisladas: auth y explorer
+  features/     Funcionalidades aisladas: auth, explorer y uploads
   pages/        Composición de páginas por ruta
   shared/       Cliente API, configuración, UI y utilidades transversales
   styles/       Tokens y estilos globales
@@ -66,4 +66,18 @@ crear carpeta, renombrar, mover, enviar a papelera, abrir y descargar. Las
 descargas usan una URL autenticada del backend y no cargan bytes del archivo en
 memoria del navegador.
 
-Subidas, visualizadores y miniaturas pertenecen a fases posteriores.
+## Subidas
+
+El explorador permite elegir varios archivos o arrastrarlos a la carpeta abierta.
+Cada transferencia usa sesiones reanudables del backend: el navegador envía
+chunks de 4 MiB, muestra el progreso, permite cancelar o reintentar y reconcilia
+el offset con `HEAD` antes de retomar una sesión. La cola mantiene dos subidas
+concurrentes y reutiliza cookies HttpOnly, CSRF y la renovación de sesión del
+cliente HTTP central.
+
+La API actual no define un contrato de árbol para subir carpetas completas, por
+lo que esa selección no se expone todavía. La reanudación funciona mientras la
+SPA conserva el archivo seleccionado; una recarga completa requiere seleccionar
+el archivo otra vez.
+
+Visualizadores y miniaturas pertenecen a la Fase 7.

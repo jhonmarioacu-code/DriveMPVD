@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { SessionControls } from "@/features/auth/ui/session-controls";
+import { UploadTray } from "@/features/uploads";
 import { ThemeSwitcher } from "@/shared/ui/theme-switcher";
 import { cn } from "@/shared/utils/cn";
 
@@ -164,10 +165,14 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8" id="main-content">
+        <main
+          className="mx-auto max-w-7xl px-4 py-8 pb-40 sm:px-6 lg:px-8"
+          id="main-content"
+        >
           <Outlet />
         </main>
       </div>
+      <UploadTray />
     </div>
   );
 }
