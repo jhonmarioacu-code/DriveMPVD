@@ -16,18 +16,18 @@
 
 ## Endpoints
 
-| Método | Ruta | Resultado |
-|---|---|---|
-| `GET` | `/api/v1/storage/navigation` | Raíz o breadcrumbs de una carpeta autorizada. |
-| `GET` | `/api/v1/storage/folders/{folder_id}/entries` | Hijos directos paginados. |
-| `GET` | `/api/v1/storage/files/{file_id}` | Metadatos del archivo. |
-| `POST` | `/api/v1/storage/folders` | Crear carpeta. |
-| `PATCH` | `/api/v1/storage/entries/{entry_id}` | Renombrar entrada. |
-| `POST` | `/api/v1/storage/entries/{entry_id}/move` | Mover entrada. |
-| `POST` | `/api/v1/storage/entries/{entry_id}/copy` | Copiar entrada. |
-| `POST` | `/api/v1/storage/entries/{entry_id}/trash` | Enviar subárbol a papelera. |
-| `POST` | `/api/v1/storage/trash/{trash_item_id}/restore` | Restaurar subárbol. |
-| `DELETE` | `/api/v1/storage/trash/{trash_item_id}` | Eliminar metadatos definitivamente. |
+| Método   | Ruta                                            | Resultado                                     |
+| -------- | ----------------------------------------------- | --------------------------------------------- |
+| `GET`    | `/api/v1/storage/navigation`                    | Raíz o breadcrumbs de una carpeta autorizada. |
+| `GET`    | `/api/v1/storage/folders/{folder_id}/entries`   | Hijos directos paginados.                     |
+| `GET`    | `/api/v1/storage/files/{file_id}`               | Metadatos del archivo.                        |
+| `POST`   | `/api/v1/storage/folders`                       | Crear carpeta.                                |
+| `PATCH`  | `/api/v1/storage/entries/{entry_id}`            | Renombrar entrada.                            |
+| `POST`   | `/api/v1/storage/entries/{entry_id}/move`       | Mover entrada.                                |
+| `POST`   | `/api/v1/storage/entries/{entry_id}/copy`       | Copiar entrada.                               |
+| `POST`   | `/api/v1/storage/entries/{entry_id}/trash`      | Enviar subárbol a papelera.                   |
+| `POST`   | `/api/v1/storage/trash/{trash_item_id}/restore` | Restaurar subárbol.                           |
+| `DELETE` | `/api/v1/storage/trash/{trash_item_id}`         | Eliminar metadatos definitivamente.           |
 
 El listado acepta `limit`, `cursor`, `sort_by`, `direction`, `name`, `kind`,
 `extension`, `minimum_size`, `maximum_size`, `modified_from` y `modified_to`.
@@ -50,15 +50,15 @@ breadcrumbs sin inferirlos desde una carpeta conocida.
 
 ## Validación
 
-| Control | Resultado |
-|---|---|
-| Black | 123 archivos sin cambios requeridos |
-| Ruff | Sin incidencias |
-| MyPy estricto | 123 archivos sin incidencias |
-| Pytest | 81 pruebas superadas |
-| Cobertura líneas/ramas | 91,53 %; mínimo 90 % |
-| PostgreSQL | 16.14 real |
-| Alembic | downgrade/upgrade/check sin drift |
+| Control                | Resultado                           |
+| ---------------------- | ----------------------------------- |
+| Black                  | 123 archivos sin cambios requeridos |
+| Ruff                   | Sin incidencias                     |
+| MyPy estricto          | 123 archivos sin incidencias        |
+| Pytest                 | 81 pruebas superadas                |
+| Cobertura líneas/ramas | 91,53 %; mínimo 90 %                |
+| PostgreSQL             | 16.14 real                          |
+| Alembic                | downgrade/upgrade/check sin drift   |
 
 ## Riesgos y recomendaciones
 

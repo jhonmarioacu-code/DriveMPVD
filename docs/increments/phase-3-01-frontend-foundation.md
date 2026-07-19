@@ -36,14 +36,14 @@ no importa internals de features futuras.
 
 Validado localmente con Node.js 24.18.0 y npm 11.16.0:
 
-| Control | Resultado |
-|---|---|
-| Prettier | Sin diferencias |
-| ESLint | Sin incidencias ni advertencias |
-| TypeScript estricto | Proyectos app y Node sin incidencias |
-| Vitest | 16 pruebas superadas |
-| Cobertura líneas/ramas | 96,58 % / 90,10 %; mínimo 80 % |
-| Build Vite | Correcto; JS 367,61 kB (117,70 kB gzip) |
+| Control                | Resultado                               |
+| ---------------------- | --------------------------------------- |
+| Prettier               | Sin diferencias                         |
+| ESLint                 | Sin incidencias ni advertencias         |
+| TypeScript estricto    | Proyectos app y Node sin incidencias    |
+| Vitest                 | 16 pruebas superadas                    |
+| Cobertura líneas/ramas | 96,58 % / 90,10 %; mínimo 80 %          |
+| Build Vite             | Correcto; JS 367,61 kB (117,70 kB gzip) |
 
 Las pruebas cubren contrato HTTP, errores uniformes, credenciales, respuesta
 inválida, temas persistidos y del sistema, shell móvil, 404 y los estados de la

@@ -4,6 +4,16 @@ set -eu
 : "${DRIVEMPVD_NGINX_CLIENT_MAX_BODY_SIZE:=50g}"
 export DRIVEMPVD_NGINX_CLIENT_MAX_BODY_SIZE
 
+if [ "${DRIVEMPVD_ENVIRONMENT:-}" = "production" ]; then
+  case "${DRIVEMPVD_TLS_ENABLED:-}" in
+    true|TRUE|1|yes|YES) ;;
+    *)
+      echo "production requires DRIVEMPVD_TLS_ENABLED=true" >&2
+      exit 1
+      ;;
+  esac
+fi
+
 case "${DRIVEMPVD_TLS_ENABLED:-false}" in
   true|TRUE|1|yes|YES)
     server_configuration=/etc/nginx/drivempvd/https.conf

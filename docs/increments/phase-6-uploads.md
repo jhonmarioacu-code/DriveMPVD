@@ -32,13 +32,13 @@ ya cubría la carga por partes, la reanudación y la publicación atómica.
 Todos los recursos están bajo `/api/v1` y mantienen el envelope JSON habitual,
 salvo `HEAD`, que responde sin cuerpo.
 
-| Método y ruta | Petición del cliente | Respuesta que usa el frontend |
-|---|---|---|
-| `POST /storage/uploads` | JSON `{ parent_id, filename, size, mime_type }` | Sesión de subida; `201`, `Location`, `Upload-Offset` y `Upload-Length`. |
-| `HEAD /storage/uploads/{upload_id}` | Cookie de sesión | `204` con `Upload-Offset`, `Upload-Length`, `Upload-Status` y `Upload-Expires`. |
-| `PATCH /storage/uploads/{upload_id}` | Bytes `application/offset+octet-stream` y cabecera `Upload-Offset` | Resultado de chunk y nuevo offset. Un `409 storage.upload_offset_mismatch` incluye el offset esperado en la cabecera `Upload-Offset`. |
-| `POST /storage/uploads/{upload_id}/complete` | Petición vacía | Archivo publicado tras validar longitud, MIME y checksum. |
-| `DELETE /storage/uploads/{upload_id}` | Petición vacía | Sesión cancelada y staging limpiado. |
+| Método y ruta                                | Petición del cliente                                               | Respuesta que usa el frontend                                                                                                         |
+| -------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /storage/uploads`                      | JSON `{ parent_id, filename, size, mime_type }`                    | Sesión de subida; `201`, `Location`, `Upload-Offset` y `Upload-Length`.                                                               |
+| `HEAD /storage/uploads/{upload_id}`          | Cookie de sesión                                                   | `204` con `Upload-Offset`, `Upload-Length`, `Upload-Status` y `Upload-Expires`.                                                       |
+| `PATCH /storage/uploads/{upload_id}`         | Bytes `application/offset+octet-stream` y cabecera `Upload-Offset` | Resultado de chunk y nuevo offset. Un `409 storage.upload_offset_mismatch` incluye el offset esperado en la cabecera `Upload-Offset`. |
+| `POST /storage/uploads/{upload_id}/complete` | Petición vacía                                                     | Archivo publicado tras validar longitud, MIME y checksum.                                                                             |
+| `DELETE /storage/uploads/{upload_id}`        | Petición vacía                                                     | Sesión cancelada y staging limpiado.                                                                                                  |
 
 El frontend valida que las cabeceras de `HEAD` sean enteros no negativos y que
 el estado esté entre `created`, `uploading`, `completed`, `cancelled` o
@@ -89,15 +89,15 @@ antes de enviar otro chunk se reconcilia el offset del servidor.
 
 ## Validación de cierre
 
-| Control | Resultado |
-|---|---|
-| Prettier (`npm run format`) | Correcto, sin diferencias. |
-| ESLint (`npm run lint`) | Correcto, sin incidencias ni advertencias. |
-| TypeScript estricto (`npm run typecheck`) | Correcto. |
-| Vitest y cobertura (`npm run test`) | 87 pruebas correctas; 91,04 % sentencias, 80,59 % ramas, 90,94 % funciones y 93,06 % líneas. |
-| Build de producción (`npm run build`) | Correcto; JS 422,99 kB (132,28 kB gzip) y CSS 34,26 kB (7,31 kB gzip). |
-| Backend: Black, Ruff y MyPy | Correcto; 133 archivos Python verificados. |
-| Backend: Pytest sin cobertura | 80 superadas y 26 omitidas por no haber PostgreSQL externo. |
+| Control                                   | Resultado                                                                                    |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Prettier (`npm run format`)               | Correcto, sin diferencias.                                                                   |
+| ESLint (`npm run lint`)                   | Correcto, sin incidencias ni advertencias.                                                   |
+| TypeScript estricto (`npm run typecheck`) | Correcto.                                                                                    |
+| Vitest y cobertura (`npm run test`)       | 87 pruebas correctas; 91,04 % sentencias, 80,59 % ramas, 90,94 % funciones y 93,06 % líneas. |
+| Build de producción (`npm run build`)     | Correcto; JS 422,99 kB (132,28 kB gzip) y CSS 34,26 kB (7,31 kB gzip).                       |
+| Backend: Black, Ruff y MyPy               | Correcto; 133 archivos Python verificados.                                                   |
+| Backend: Pytest sin cobertura             | 80 superadas y 26 omitidas por no haber PostgreSQL externo.                                  |
 
 Las pruebas de frontend cubren el contrato de cada endpoint, progreso por
 chunk, cancelación, reintento/reconciliación de offset, cola concurrente,

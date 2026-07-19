@@ -14,3 +14,4 @@
 - [Fase 7: visualizadores, miniaturas, streaming y descargas](phase-7-viewers-thumbnails-streaming.md) — implementada y validada
 - [Fase 8: Docker Compose y Nginx](phase-8-deployment.md) — cerrada; validación con un motor Docker pendiente
 - [Fase 9: optimización y archivos grandes](phase-9-optimization.md) — implementada; benchmark de host real pendiente
+- [Fase 10: validación final y documentación operativa](phase-10-final-validation.md) — validada localmente; host Ubuntu/Docker pendiente

@@ -64,12 +64,13 @@ host Ubuntu con Docker Compose y estos pasos:
 
 ```bash
 cp docker/.env.example docker/.env
-mkdir -p data/storage docker/certificates docker/acme-webroot
+sudo install -d -m 0750 -o 10001 -g 10001 data/storage
+mkdir -p docker/certificates docker/acme-webroot
 docker compose --env-file docker/.env up --build --wait -d
 docker compose --env-file docker/.env run --rm api \
   python -m app.infrastructure.cli.create_admin admin
 DRIVEMPVD_SMOKE_USERNAME=admin \
-DRIVEMPVD_SMOKE_PASSWORD='contraseña-creada' \
+DRIVEMPVD_SMOKE_PASSWORD_FILE=/run/user/"$(id -u)"/drivempvd-smoke-password \
   sh docker/verify-deployment.sh
 ```
 

@@ -9,18 +9,18 @@ actividad y jobs continúan como diseño previsto.
 Representan carpetas y archivos distintos en dominio. La infraestructura los
 persiste bajo una raíz lógica común.
 
-| Concepto | Regla |
-|---|---|
-| `id` | UUID v7 generado por la aplicación, inmutable |
-| `parent_id` | Carpeta padre; nulo solo para la raíz canónica |
-| `entry_type` | `file` o `folder`, nunca inferido de la extensión |
-| `name` | Nombre visible validado; no contiene separadores ni segmentos `.`/`..` |
-| `normalized_name` | Forma normalizada para unicidad y búsqueda consistente |
-| `mime_type` | MIME declarado/detectado; la extracción se implementará después |
-| `extension` | Valor normalizado, útil para filtro; no determina seguridad |
-| `size` | Bytes del blob para archivos; tamaño agregado no se calcula al listar |
-| `checksum_sha256` | Digest canónico calculado durante la subida futura |
-| `deleted_at` | Nulo o instante de entrada del subárbol a papelera |
+| Concepto          | Regla                                                                  |
+| ----------------- | ---------------------------------------------------------------------- |
+| `id`              | UUID v7 generado por la aplicación, inmutable                          |
+| `parent_id`       | Carpeta padre; nulo solo para la raíz canónica                         |
+| `entry_type`      | `file` o `folder`, nunca inferido de la extensión                      |
+| `name`            | Nombre visible validado; no contiene separadores ni segmentos `.`/`..` |
+| `normalized_name` | Forma normalizada para unicidad y búsqueda consistente                 |
+| `mime_type`       | MIME declarado/detectado; la extracción se implementará después        |
+| `extension`       | Valor normalizado, útil para filtro; no determina seguridad            |
+| `size`            | Bytes del blob para archivos; tamaño agregado no se calcula al listar  |
+| `checksum_sha256` | Digest canónico calculado durante la subida futura                     |
+| `deleted_at`      | Nulo o instante de entrada del subárbol a papelera                     |
 
 Invariantes:
 

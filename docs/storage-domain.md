@@ -6,15 +6,15 @@ SQLAlchemy, PostgreSQL ni adaptadores de archivos.
 
 ## Modelo
 
-| Entidad | Responsabilidad |
-|---|---|
-| `Folder` | Nodo contenedor del árbol lógico. |
-| `File` | Nombre visible y metadatos de la versión actual. |
-| `StorageObject` | Contenido físico inmutable identificado por una clave opaca. |
-| `FileVersion` | Snapshot inmutable que relaciona archivo y objeto. |
-| `Thumbnail` / `Preview` | Estado de un derivado regenerable. |
-| `UploadSession` | Estado futuro de una carga reanudable, sin contener bytes. |
-| `TrashItem` | Tombstone de la raíz eliminada y su padre original. |
+| Entidad                 | Responsabilidad                                              |
+| ----------------------- | ------------------------------------------------------------ |
+| `Folder`                | Nodo contenedor del árbol lógico.                            |
+| `File`                  | Nombre visible y metadatos de la versión actual.             |
+| `StorageObject`         | Contenido físico inmutable identificado por una clave opaca. |
+| `FileVersion`           | Snapshot inmutable que relaciona archivo y objeto.           |
+| `Thumbnail` / `Preview` | Estado de un derivado regenerable.                           |
+| `UploadSession`         | Estado futuro de una carga reanudable, sin contener bytes.   |
+| `TrashItem`             | Tombstone de la raíz eliminada y su padre original.          |
 
 `Folder` y `File` son entidades distintas en dominio. La infraestructura usa
 una tabla común `storage_entries` para poder aplicar unicidad, jerarquía y

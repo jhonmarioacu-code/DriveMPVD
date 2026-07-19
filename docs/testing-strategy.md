@@ -46,3 +46,9 @@ Pytest y cobertura. Frontend desde su bootstrap: ESLint, Prettier en modo check,
 `tsc --noEmit`, tests y build Vite.
 Contenedores: escaneo de dependencias/imágenes, healthchecks y smoke test de
 Compose. CI falla si OpenAPI cambió sin regenerar/verificar el cliente.
+
+El cierre operativo exige además, en un host Ubuntu con Docker Engine: preflight
+de producción, TLS y renovación ensayados, smoke autenticado, restore drill
+aislado de PostgreSQL y almacenamiento, prueba de 50 GiB, concurrencia y una
+decisión registrada sobre `X-Accel-Redirect`. Las validaciones no ejecutables
+en el host de desarrollo se registran como pendientes, no como aprobadas.

@@ -43,8 +43,8 @@ backend/
 
 ## Migraciones
 
-| Revisión | Descripción | Upgrade | Downgrade |
-|---|---|---|---|
+| Revisión        | Descripción     | Upgrade                               | Downgrade                        |
+| --------------- | --------------- | ------------------------------------- | -------------------------------- |
 | `20260718_0001` | Outbox auditada | Tabla, trigger, constraints e índices | Elimina exactamente esos objetos |
 
 La suite ejecuta `downgrade base`, `upgrade head` y `alembic check`. El check no
@@ -52,13 +52,13 @@ detectó operaciones pendientes entre metadata ORM y migración.
 
 ## Índices
 
-| Índice | Razón |
-|---|---|
-| PK `id` | Lookup directo por UUID v7 |
-| `pending_created_id` parcial | Worker: pendientes activos en orden keyset |
+| Índice                         | Razón                                         |
+| ------------------------------ | --------------------------------------------- |
+| PK `id`                        | Lookup directo por UUID v7                    |
+| `pending_created_id` parcial   | Worker: pendientes activos en orden keyset    |
 | `aggregate_created_id` parcial | Historial filtrado por aggregate sin borrados |
-| `type_created_id` parcial | Eventos por tipo y paginación estable |
-| `deleted_at` parcial | Purga/mantenimiento solo sobre soft-deleted |
+| `type_created_id` parcial      | Eventos por tipo y paginación estable         |
+| `deleted_at` parcial           | Purga/mantenimiento solo sobre soft-deleted   |
 
 Los índices incluyen los campos de orden para evitar sort adicional. Se
 validarán con `EXPLAIN (ANALYZE, BUFFERS)` cuando exista volumen representativo.
@@ -79,14 +79,14 @@ repositorio deberá contar sentencias.
 
 Entorno de integración: PostgreSQL 16.14 real.
 
-| Control | Resultado |
-|---|---|
-| Black | 67 archivos sin cambios requeridos |
-| Ruff | Sin incidencias |
-| MyPy estricto | 67 archivos sin incidencias |
-| Pytest | 40 pruebas superadas |
-| Cobertura de líneas/ramas | 95,06 %; umbral 90 % |
-| Alembic | Downgrade/upgrade/check correctos |
+| Control                   | Resultado                          |
+| ------------------------- | ---------------------------------- |
+| Black                     | 67 archivos sin cambios requeridos |
+| Ruff                      | Sin incidencias                    |
+| MyPy estricto             | 67 archivos sin incidencias        |
+| Pytest                    | 40 pruebas superadas               |
+| Cobertura de líneas/ramas | 95,06 %; umbral 90 %               |
+| Alembic                   | Downgrade/upgrade/check correctos  |
 
 ## Limitaciones y riesgos
 

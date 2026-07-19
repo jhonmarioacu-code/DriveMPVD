@@ -24,8 +24,9 @@ En Linux o Ubuntu Server, desde la raíz del repositorio:
 
 ```bash
 cp docker/.env.example docker/.env
-mkdir -p data/storage docker/certificates docker/acme-webroot
-docker compose --env-file docker/.env config
+sudo install -d -m 0750 -o 10001 -g 10001 data/storage
+mkdir -p docker/certificates docker/acme-webroot
+docker compose --env-file docker/.env config --quiet
 docker compose --env-file docker/.env up --build --wait -d
 docker compose --env-file docker/.env run --rm api \
   python -m app.infrastructure.cli.create_admin admin
@@ -40,7 +41,7 @@ de crear el administrador:
 
 ```bash
 export DRIVEMPVD_SMOKE_USERNAME=admin
-export DRIVEMPVD_SMOKE_PASSWORD='la-contrasena-creada'
+export DRIVEMPVD_SMOKE_PASSWORD_FILE=/run/user/"$(id -u)"/drivempvd-smoke-password
 sh docker/verify-deployment.sh
 ```
 
@@ -58,20 +59,22 @@ El argumento `--start` de ese script valida Compose y levanta los servicios con
    ```
 
 2. Copie `docker/.env.production.example` a `docker/.env`. Reemplace todas las
-   cadenas `replace-...` por secretos distintos de al menos 32 bytes y ajuste
-   el DSN, el dominio de certificado y los puertos. Use, por ejemplo,
-   `openssl rand -hex 48` para los tres secretos de autenticación.
+   cadenas `replace-...` por secretos distintos de al menos 32 bytes, ajuste
+   el DSN, el dominio, puertos y un `DRIVEMPVD_IMAGE_TAG` inmutable. Use, por
+   ejemplo, `openssl rand -hex 48` para los tres secretos de autenticación.
 
-3. Obtenga certificados con el método operativo elegido. Para Certbot en el
-   host, arranque primero con `DRIVEMPVD_TLS_ENABLED=false`, utilice el webroot
-   configurado en `DRIVEMPVD_ACME_WEBROOT_PATH`, y emita el certificado. Monte
-   su directorio `live/<dominio>` en `DRIVEMPVD_TLS_CERTIFICATES_PATH`; debe
-   contener `fullchain.pem` y `privkey.pem`.
+3. Obtenga certificados con el método operativo elegido. Para Certbot, copie
+   archivos PEM dereferenciados a `/etc/drivempvd/tls`; no monte
+   `live/<dominio>` directamente porque sus archivos suelen ser symlinks a
+   `archive/`. Configure un deploy hook que recopie ambos PEM y recargue Nginx
+   después de cada renovación. El procedimiento completo está en
+   [`docs/operations.md`](../docs/operations.md#tls-y-cabeceras).
 
-4. Cambie `DRIVEMPVD_TLS_ENABLED=true` y `DRIVEMPVD_AUTH_COOKIE_SECURE=true`,
-   después levante o recree el stack:
+4. Compruebe el entorno sin imprimir secretos y después levante o recree el
+   stack:
 
    ```bash
+   sudo python3 docker/preflight.py --env-file docker/.env
    docker compose --env-file docker/.env up --build --wait -d
    docker compose --env-file docker/.env ps
    ```
@@ -118,7 +121,7 @@ archivo entero en memoria:
 
 ```bash
 export DRIVEMPVD_BENCHMARK_USERNAME=admin
-export DRIVEMPVD_BENCHMARK_PASSWORD='contraseña-creada'
+export DRIVEMPVD_BENCHMARK_PASSWORD_FILE=/run/user/"$(id -u)"/drivempvd-benchmark-password
 python3 backend/scripts/benchmark_deployment.py \
   --file /data/bench/phase9-50g.bin \
   --base-url https://drive.example.com

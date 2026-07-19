@@ -25,7 +25,9 @@ PostgreSQL y Nginx reales.
 - Keyset pagination; no se usa `OFFSET` profundo.
 - Proyecciones seleccionan solo columnas visibles; blobs y payloads no entran
   en listados.
-- Estadísticas, autovacuum y bloat se observan con umbrales definidos.
+- Estadísticas, autovacuum y bloat se observan en el runbook de
+  [mantenimiento](maintenance.md#rutina-de-mantenimiento); los umbrales de
+  capacidad se revisan con el dataset real antes de automatizar alertas.
 
 Los índices exactos se validarán con `EXPLAIN (ANALYZE, BUFFERS)` sobre datos
 sintéticos de escala objetivo antes de fijarlos en migraciones. No se añadieron
@@ -95,7 +97,8 @@ Compose, use [`backend/scripts/benchmark_deployment.py`](../backend/scripts/benc
 con un payload preexistente; mide p50/p95/p99 de chunks, throughput de subida y
 descarga, checksum, Range de 1 MiB y el pico trazado de memoria. El resultado
 debe compararse bajo 1, 2 y más procesos cliente para decidir la concurrencia
-del host.
+del host. Defina `DRIVEMPVD_BENCHMARK_PASSWORD_FILE` con un archivo `0600` en
+lugar de exportar la contraseña en el historial del shell.
 
 ## Decisión sobre X-Accel-Redirect
 

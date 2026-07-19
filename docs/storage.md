@@ -45,7 +45,11 @@ el archivo con `os.replace`.
 
 Nginx aplica `proxy_request_buffering off` sólo a la ruta de chunks, con
 timeouts de una hora y límites configurables. La API lee el body como stream
-con backpressure. Las sesiones expiran y un job limpia staging antiguo.
+con backpressure. Las sesiones expiran, pero esta versión todavía no despliega
+un worker de reconciliación que limpie staging antiguo u objetos huérfanos. No
+elimine esas rutas manualmente: monitorice su crecimiento y trate cualquier
+limpieza como una incidencia operativa hasta que exista un reconciliador
+soportado.
 
 ## Descargas y streaming
 
@@ -89,8 +93,11 @@ idempotente, manteniendo el placeholder durante el procesamiento.
 
 ## Backup
 
-El conjunto esencial es PostgreSQL más `objects`. `staging` y `derivatives` se
-excluyen. Para consistencia se toma primero un snapshot/backup coordinado de
-metadatos y objetos o se detienen escrituras durante la ventana. Nunca se
-considera válido un backup hasta restaurarlo y verificar referencias y hashes
-muestreados.
+El conjunto consistente actual es PostgreSQL más el árbol completo de
+almacenamiento: `objects` y `staging`. Incluir staging evita restaurar sesiones
+de subida que apunten a archivos ausentes; `derivatives`, cuando exista un
+worker real, sólo podrá excluirse si es regenerable y se documenta esa
+recuperación. Para consistencia se detienen escrituras durante la ventana o se
+toma un snapshot coordinado. Nunca se considera válido un backup hasta
+restaurarlo y verificar dump, referencias y hashes. Consulte la
+[guía de mantenimiento](maintenance.md#copia-de-seguridad-coordinada).

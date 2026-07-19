@@ -90,7 +90,9 @@ IP o user-agent en claro. Los detalles son cerrados y no contienen secretos.
 
 - No hay MFA ni recuperación automática; una recuperación es operación local.
 - No hay rotación solapada de claves (`kid`); cambiar secreto invalida sesiones.
-- La confianza en IP depende de configurar correctamente proxies de Uvicorn/Nginx.
+- La composición estándar sobrescribe la cadena `X-Forwarded-For`; un proxy o
+  balanceador externo requiere una configuración explícita de IPs confiables y
+  límites por cliente antes de ponerse delante de Nginx.
 - Los eventos aún no tienen retención/alertas ni exportación SIEM.
 - Multiusuario/RBAC exige migración explícita; no hay permisos latentes o falsos.
 

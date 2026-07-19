@@ -30,11 +30,11 @@ en la Fase 1.
 | REST, Swagger y OpenAPI                  | `/api/v1`, envelope y contrato generado                                             | 2.5 almacenamiento implementado                              |
 | Responsive, temas y notificaciones       | Shell/temas, explorer responsive, bandeja de subida y diálogo de visor              | 3.1, 5, 6 y 7 implementados                                  |
 | Atajos de teclado                        | Commands compartidos y control de foco                                              | 5                                                            |
-| 80 % de cobertura                        | Umbral de líneas/ramas y pirámide definida                                          | 10                                                           |
+| 80 % de cobertura                        | Umbral de líneas/ramas y pirámide definida                                          | 10 local validado; integración PostgreSQL de host pendiente  |
 | Type hints y calidad                     | Type checker, Ruff/Black, ESLint/Prettier                                           | 2 y 3.1 implementados; 10                                    |
-| Docker Compose y Nginx                   | Cinco servicios, dos redes, TLS y proxy de transferencias                           | 8 implementado; prueba runtime de host pendiente             |
-| Ubuntu 24.04                             | Guía de host, certificados y variables                                              | 8 implementado; verificación de host pendiente               |
-| Instalar/actualizar/backup/restaurar     | Procedimientos operativos y smoke test autenticado                                  | 8 implementado; restauración ensayada pendiente              |
+| Docker Compose y Nginx                   | Cinco servicios, dos redes, TLS y proxy de transferencias                           | 8/10 implementado; prueba runtime de host pendiente          |
+| Ubuntu 24.04                             | Guía de host, preflight, certificados y variables                                   | 10 documentado; verificación de host pendiente               |
+| Instalar/actualizar/backup/restaurar     | Runbooks, preflight y smoke autenticado                                             | 10 documentado; restore drill pendiente                      |
 | Extensibilidad futura                    | Módulos y puertos, sin abstracciones especulativas                                  | Transversal                                                  |
 | DI solo en infraestructura               | Composition root único y factories de rutas                                         | 2                                                            |
 | Settings centralizado                    | Variables `DRIVEMPVD_*`, validación fail-fast                                       | 2                                                            |

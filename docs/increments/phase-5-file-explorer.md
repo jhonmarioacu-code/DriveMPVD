@@ -52,16 +52,16 @@ backend/
 
 ## Validación
 
-| Control | Resultado |
-|---|---|
-| Prettier | Sin diferencias |
-| ESLint | Sin incidencias ni advertencias |
-| TypeScript estricto | Correcto |
-| Vitest | 53 pruebas superadas |
-| Cobertura frontend | 91,07 % sentencias; 80,57 % ramas; mínimo 80 % |
-| Build Vite | Correcto; JS 407,62 kB (128,27 kB gzip) |
-| Backend Black/Ruff/MyPy | Correcto |
-| Backend Pytest sin PostgreSQL externo | 80 superadas, 26 omitidas |
+| Control                               | Resultado                                      |
+| ------------------------------------- | ---------------------------------------------- |
+| Prettier                              | Sin diferencias                                |
+| ESLint                                | Sin incidencias ni advertencias                |
+| TypeScript estricto                   | Correcto                                       |
+| Vitest                                | 53 pruebas superadas                           |
+| Cobertura frontend                    | 91,07 % sentencias; 80,57 % ramas; mínimo 80 % |
+| Build Vite                            | Correcto; JS 407,62 kB (128,27 kB gzip)        |
+| Backend Black/Ruff/MyPy               | Correcto                                       |
+| Backend Pytest sin PostgreSQL externo | 80 superadas, 26 omitidas                      |
 
 Las pruebas cubren rutas, caché y paginación, breadcrumbs, selección, diálogos,
 mutaciones, estados de error y permisos, iconos, acciones de apertura/descarga,

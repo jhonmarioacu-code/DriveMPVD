@@ -23,7 +23,9 @@ publicar `/data/storage` como un directorio estático.
   revoca todas.
 
 Los secretos solo se inyectan por archivos Docker secrets o variables de
-entorno protegidas. Nunca se incluyen valores reales en Git ni imágenes.
+entorno protegidas. Nunca se incluyen valores reales en Git ni imágenes. El
+archivo `docker/.env` de producción requiere permisos `0600`; su backup se
+cifra y se gestiona por separado del dump de datos.
 
 ## CSRF y navegador
 
@@ -36,6 +38,12 @@ Nginx emite una CSP de mismo origen, `X-Content-Type-Options: nosniff`,
 `frame-ancestors 'self'`. También emite `X-Frame-Options: SAMEORIGIN`, que
 permite el iframe PDF autenticado de la SPA sin permitir framing por terceros.
 HSTS sólo se añade por el servidor TLS; no se envía en HTTP local.
+
+La composición estándar es el borde de confianza: Nginx sustituye
+`X-Forwarded-For` por su par TCP directo en vez de propagar una cadena aportada
+por el cliente. Si se coloca otro proxy o balanceador delante, debe configurarse
+explícitamente una lista de IPs confiables, real-IP y límites por cliente antes
+de exponer el servicio.
 
 ## Rate limiting
 
@@ -80,10 +88,15 @@ actual de placeholders no ejecuta ni procesa contenido subido en el cliente.
   80/443 y baja sus workers.
 - PostgreSQL no se publica a Internet y la red `private` de Compose es interna.
 - Nginx es el único servicio con puertos publicados. TLS requiere certificados
-  renovables montados desde el host.
+  renovables montados desde el host. El montaje contiene PEMs regulares en
+  `/etc/drivempvd/tls`, no los symlinks de Certbot bajo `live/`; el hook de
+  renovación los actualiza y recarga Nginx.
 - `/data/storage` se monta sólo en API; el frontend no lo ve y Nginx no lo
   monta en la composición normal.
-- Backups se cifran y se prueba su restauración.
+- Los backups deben cifrarse y probarse mediante restore drill antes de contar
+  como recuperables. El procedimiento está en
+  [mantenimiento](maintenance.md); el ensayo en un host Docker real sigue
+  pendiente de evidencia operativa.
 
 Antes del despliegue público se ejecutará una lista de comprobación OWASP ASVS
 aplicable, análisis de dependencias y revisión de la configuración generada.

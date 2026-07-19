@@ -1,12 +1,19 @@
 """Storage command and read-model transfer objects."""
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from app.application.ports.file_storage import StorageKey
+if TYPE_CHECKING:
+    from app.application.ports.file_storage import StorageKey
+else:
+    # Keep runtime annotation resolution independent from the ports package.
+    StorageKey = str
 
 
 class StorageEntryKind(StrEnum):

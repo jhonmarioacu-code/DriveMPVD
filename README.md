@@ -9,22 +9,23 @@ DDD, FastAPI y PostgreSQL en el backend, y React en el frontend.
 La arquitectura, el backend hasta el incremento 2.7, la base del frontend, la
 autenticación web, el explorador, las subidas reanudables y la visualización de
 archivos están terminados. La infraestructura de contenedores y Nginx está
-implementada; falta ejecutarla una vez en un host con Docker Compose para cerrar
-su validación operativa. La optimización de transferencias ya incluye medición
+implementada y validada estáticamente junto con los runbooks operativos; falta
+ejecutarla una vez en un host Ubuntu con Docker Compose para cerrar su
+validación operativa. La optimización de transferencias ya incluye medición
 local y arneses de 50 GiB, pendientes de repetir en el host objetivo.
 
-| Fase | Alcance                                           | Estado                          |
-| ---- | ------------------------------------------------- | ------------------------------- |
-| 1    | Arquitectura, límites, contratos y estructura     | Terminada                       |
-| 2    | Backend, almacenamiento y transferencias          | Terminada — incrementos 2.1–2.7 |
-| 3    | Frontend base                                     | Terminada — incremento 3.1      |
-| 4    | Autenticación y endurecimiento                    | Terminada                       |
-| 5    | Explorador de archivos                            | Terminada                       |
-| 6    | Subidas normales y reanudables                    | Terminada                       |
-| 7    | Visualizadores, miniaturas, streaming y descargas | Terminada                       |
-| 8    | Docker Compose y Nginx                            | Cerrada; runtime pendiente      |
-| 9    | Optimización y operación                          | Implementada; host pendiente    |
-| 10   | Pruebas y cobertura final                         | Pendiente                       |
+| Fase | Alcance                                           | Estado                              |
+| ---- | ------------------------------------------------- | ----------------------------------- |
+| 1    | Arquitectura, límites, contratos y estructura     | Terminada                           |
+| 2    | Backend, almacenamiento y transferencias          | Terminada — incrementos 2.1–2.7     |
+| 3    | Frontend base                                     | Terminada — incremento 3.1          |
+| 4    | Autenticación y endurecimiento                    | Terminada                           |
+| 5    | Explorador de archivos                            | Terminada                           |
+| 6    | Subidas normales y reanudables                    | Terminada                           |
+| 7    | Visualizadores, miniaturas, streaming y descargas | Terminada                           |
+| 8    | Docker Compose y Nginx                            | Cerrada; runtime pendiente          |
+| 9    | Optimización y operación                          | Implementada; host pendiente        |
+| 10   | Validación final y documentación operativa        | Validada localmente; host pendiente |
 
 ## Documentación de arquitectura
 
@@ -38,6 +39,7 @@ local y arneses de 50 GiB, pendientes de repetir en el host objetivo.
 - [Arquitectura del frontend](docs/frontend-architecture.md)
 - [Estrategia de pruebas](docs/testing-strategy.md)
 - [Despliegue y operación](docs/operations.md)
+- [Mantenimiento, backup y recuperación](docs/maintenance.md)
 - [Trazabilidad de requisitos](docs/requirements-traceability.md)
 - [Registro de decisiones](docs/adr/README.md)
 
@@ -68,8 +70,8 @@ detalles del sistema de archivos.
 - Datos persistentes exclusivamente bajo `/data/storage`; la base de datos
   conserva metadatos, nunca el contenido de los archivos.
 
-Las instrucciones ejecutables de instalación, actualización, copia de
-seguridad, restauración y despliegue están en
-[`docs/operations.md`](docs/operations.md), junto con el smoke test autenticado
-de Compose. La prueba en un host Docker real sigue siendo el cierre operativo
-del incremento de despliegue.
+Las instrucciones de instalación, despliegue y preflight están en
+[`docs/operations.md`](docs/operations.md); backup, restauración, actualización
+y mantenimiento están en [`docs/maintenance.md`](docs/maintenance.md). El
+smoke test autenticado de Compose y la prueba en un host Docker real siguen
+siendo el cierre operativo pendiente.

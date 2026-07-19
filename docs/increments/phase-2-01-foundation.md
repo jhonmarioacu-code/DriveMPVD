@@ -36,15 +36,15 @@ compatible con Python 3.14.
 Validado localmente con Python 3.14.6, conservando target y runtime de producción
 Python 3.13:
 
-| Control | Resultado |
-|---|---|
-| Black | 43 archivos sin cambios requeridos |
-| Ruff | Sin incidencias |
-| MyPy estricto | 43 archivos sin incidencias |
-| Pytest | 18 pruebas superadas |
-| Cobertura | 94,89 % con ramas; mínimo exigido 80 % |
-| Límites Clean Architecture | Prueba AST superada |
-| Lock de producción | Instalación `--require-hashes` resuelta correctamente |
+| Control                    | Resultado                                             |
+| -------------------------- | ----------------------------------------------------- |
+| Black                      | 43 archivos sin cambios requeridos                    |
+| Ruff                       | Sin incidencias                                       |
+| MyPy estricto              | 43 archivos sin incidencias                           |
+| Pytest                     | 18 pruebas superadas                                  |
+| Cobertura                  | 94,89 % con ramas; mínimo exigido 80 %                |
+| Límites Clean Architecture | Prueba AST superada                                   |
+| Lock de producción         | Instalación `--require-hashes` resuelta correctamente |
 
 Versiones estables resueltas relevantes: FastAPI 0.139.2, SQLAlchemy 2.0.51,
 Alembic 1.18.5, Pydantic 2.13.4 y asyncpg 0.31.0. PostgreSQL se integrará y

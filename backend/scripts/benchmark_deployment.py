@@ -3,6 +3,8 @@
 Run this from the checkout on the Ubuntu host after Docker Compose and the
 administrator account are available. The script streams a pre-existing file in
 bounded chunks; it never reads the complete payload into Python memory.
+Set `DRIVEMPVD_BENCHMARK_PASSWORD_FILE` to keep the administrator password out
+of shell history; it takes precedence over `DRIVEMPVD_BENCHMARK_PASSWORD`.
 """
 
 from __future__ import annotations
@@ -48,7 +50,8 @@ class BenchmarkRequestError(RuntimeError):
 def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark authenticated resumable upload, download and Range delivery."
+            "Benchmark authenticated resumable upload, download and Range delivery "
+            "(password may come from DRIVEMPVD_BENCHMARK_PASSWORD_FILE)."
         )
     )
     parser.add_argument(
@@ -110,10 +113,11 @@ def _configuration(arguments: argparse.Namespace) -> BenchmarkConfiguration:
     if download_block_mib <= 0:
         raise ValueError("--download-block-mib must be positive.")
     username = os.environ.get("DRIVEMPVD_BENCHMARK_USERNAME")
-    password = os.environ.get("DRIVEMPVD_BENCHMARK_PASSWORD")
+    password = _password_from_environment()
     if not username or not password:
         raise ValueError(
-            "Set DRIVEMPVD_BENCHMARK_USERNAME and DRIVEMPVD_BENCHMARK_PASSWORD."
+            "Set DRIVEMPVD_BENCHMARK_USERNAME and DRIVEMPVD_BENCHMARK_PASSWORD "
+            "or DRIVEMPVD_BENCHMARK_PASSWORD_FILE."
         )
     return BenchmarkConfiguration(
         base_url=cast(str, arguments.base_url).rstrip("/") + "/",
@@ -126,6 +130,18 @@ def _configuration(arguments: argparse.Namespace) -> BenchmarkConfiguration:
         username=username,
         password=password,
     )
+
+
+def _password_from_environment() -> str | None:
+    password_file = os.environ.get("DRIVEMPVD_BENCHMARK_PASSWORD_FILE")
+    if password_file:
+        try:
+            return Path(password_file).read_text(encoding="utf-8").rstrip("\r\n")
+        except OSError as exc:
+            raise ValueError(
+                "DRIVEMPVD_BENCHMARK_PASSWORD_FILE is not readable."
+            ) from exc
+    return os.environ.get("DRIVEMPVD_BENCHMARK_PASSWORD")
 
 
 def _endpoint(configuration: BenchmarkConfiguration, path: str) -> str:

@@ -49,14 +49,14 @@ producción debe conservarse `true` y servirse exclusivamente mediante HTTPS.
 
 Validado localmente con Node.js 24.18.0 y npm 11.16.0:
 
-| Control | Resultado |
-|---|---|
-| Prettier | Sin diferencias |
-| ESLint | Sin incidencias ni advertencias |
-| TypeScript estricto | Proyectos app y Node sin incidencias |
-| Vitest | 33 pruebas superadas |
-| Cobertura líneas/ramas | 92,70 % / 81,46 %; mínimo 80 % |
-| Build Vite | Correcto; JS 379,08 kB (121,15 kB gzip) |
+| Control                | Resultado                               |
+| ---------------------- | --------------------------------------- |
+| Prettier               | Sin diferencias                         |
+| ESLint                 | Sin incidencias ni advertencias         |
+| TypeScript estricto    | Proyectos app y Node sin incidencias    |
+| Vitest                 | 33 pruebas superadas                    |
+| Cobertura líneas/ramas | 92,70 % / 81,46 %; mínimo 80 %          |
+| Build Vite             | Correcto; JS 379,08 kB (121,15 kB gzip) |
 
 Las pruebas cubren login, logout, rutas públicas/privadas, destino original,
 estados de carga y error, cookies CSRF, errores uniformes, rate limit, respuesta

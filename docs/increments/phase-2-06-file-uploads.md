@@ -17,13 +17,13 @@
 
 ## Protocolo HTTP
 
-| Método | Ruta | Función |
-|---|---|---|
-| `POST` | `/api/v1/storage/uploads` | Iniciar sesión. |
-| `HEAD` | `/api/v1/storage/uploads/{upload_id}` | Consultar offset y estado. |
-| `PATCH` | `/api/v1/storage/uploads/{upload_id}` | Añadir chunk. |
-| `POST` | `/api/v1/storage/uploads/{upload_id}/complete` | Verificar y publicar. |
-| `DELETE` | `/api/v1/storage/uploads/{upload_id}` | Cancelar y limpiar. |
+| Método   | Ruta                                           | Función                    |
+| -------- | ---------------------------------------------- | -------------------------- |
+| `POST`   | `/api/v1/storage/uploads`                      | Iniciar sesión.            |
+| `HEAD`   | `/api/v1/storage/uploads/{upload_id}`          | Consultar offset y estado. |
+| `PATCH`  | `/api/v1/storage/uploads/{upload_id}`          | Añadir chunk.              |
+| `POST`   | `/api/v1/storage/uploads/{upload_id}/complete` | Verificar y publicar.      |
+| `DELETE` | `/api/v1/storage/uploads/{upload_id}`          | Cancelar y limpiar.        |
 
 El `PATCH` exige `application/offset+octet-stream`. OpenAPI lo documenta como
 body binario y conserva autenticación Bearer/cookie y CSRF.
@@ -47,15 +47,15 @@ no detectó drift.
 
 ## Validación
 
-| Control | Resultado |
-|---|---|
-| Black | Sin cambios requeridos |
-| Ruff | Sin incidencias |
-| MyPy estricto | Sin incidencias |
-| Pytest | 93 pruebas superadas |
-| Cobertura líneas/ramas | 90,48 %; mínimo 90 % |
-| PostgreSQL | 16.14 real |
-| Alembic | downgrade/upgrade/check sin drift |
+| Control                | Resultado                         |
+| ---------------------- | --------------------------------- |
+| Black                  | Sin cambios requeridos            |
+| Ruff                   | Sin incidencias                   |
+| MyPy estricto          | Sin incidencias                   |
+| Pytest                 | 93 pruebas superadas              |
+| Cobertura líneas/ramas | 90,48 %; mínimo 90 %              |
+| PostgreSQL             | 16.14 real                        |
+| Alembic                | downgrade/upgrade/check sin drift |
 
 Las pruebas incluyen archivo pequeño, archivo de 5 MiB en cinco chunks,
 reanudación, cancelación, límites, MIME incompatible, rollback y publicación.

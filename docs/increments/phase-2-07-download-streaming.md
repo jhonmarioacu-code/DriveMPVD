@@ -34,15 +34,15 @@ Alembic no detectó drift.
 
 ## Validación
 
-| Control | Resultado |
-|---|---|
-| Black | 135 archivos sin cambios requeridos |
-| Ruff | Sin incidencias |
-| MyPy estricto | 135 archivos sin incidencias |
-| Pytest | 102 pruebas superadas |
-| Cobertura líneas/ramas | 90,79 %; mínimo 90 % |
-| PostgreSQL | 16.14 real |
-| Alembic | downgrade/upgrade/check sin drift |
+| Control                | Resultado                           |
+| ---------------------- | ----------------------------------- |
+| Black                  | 135 archivos sin cambios requeridos |
+| Ruff                   | Sin incidencias                     |
+| MyPy estricto          | 135 archivos sin incidencias        |
+| Pytest                 | 102 pruebas superadas               |
+| Cobertura líneas/ramas | 90,79 %; mínimo 90 %                |
+| PostgreSQL             | 16.14 real                          |
+| Alembic                | downgrade/upgrade/check sin drift   |
 
 Las pruebas cubren descarga completa, HEAD, rangos, multipart, vacío, 3 MiB,
 precondiciones, 416, UTF-8, ausencia física y cancelación del iterador.

@@ -105,7 +105,9 @@ de backend y escalar de forma independiente.
 - Una Unit of Work abarca cada comando.
 - La finalización de subida usa un archivo staging en el mismo filesystem,
   `fsync`, renombrado atómico y después commit de metadatos. Un reconciliador
-  limpia huérfanos ante fallos entre pasos.
+  está previsto para limpiar huérfanos ante fallos entre pasos, pero todavía no
+  se despliega en la composición actual; el runbook prohíbe borrar staging de
+  forma manual hasta que exista esa herramienta soportada.
 - Operaciones costosas se modelan como jobs idempotentes con reintentos y
   estado visible.
 - Los eventos de dominio se persisten junto con la transacción cuando deban

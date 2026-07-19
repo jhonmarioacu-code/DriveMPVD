@@ -52,15 +52,15 @@ base/head/check y no detecta drift.
 
 ## Validación
 
-| Control | Resultado |
-|---|---|
-| Black | 100 archivos sin cambios requeridos |
-| Ruff | Sin incidencias |
-| MyPy estricto | 100 archivos sin incidencias |
-| Pytest | 51 pruebas superadas |
-| Cobertura líneas/ramas | 92,31 %; mínimo 90 % |
-| PostgreSQL | 16.14 real |
-| Alembic | downgrade/upgrade/check sin drift |
+| Control                | Resultado                           |
+| ---------------------- | ----------------------------------- |
+| Black                  | 100 archivos sin cambios requeridos |
+| Ruff                   | Sin incidencias                     |
+| MyPy estricto          | 100 archivos sin incidencias        |
+| Pytest                 | 51 pruebas superadas                |
+| Cobertura líneas/ramas | 92,31 %; mínimo 90 %                |
+| PostgreSQL             | 16.14 real                          |
+| Alembic                | downgrade/upgrade/check sin drift   |
 
 ## Riesgos y recomendaciones
 

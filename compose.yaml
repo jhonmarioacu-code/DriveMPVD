@@ -47,7 +47,7 @@ services:
 
   migrate:
     build: *api-build
-    image: drivempvd-api:local
+    image: drivempvd-api:${DRIVEMPVD_IMAGE_TAG:-local}
     <<: *backend-runtime
     command: ["alembic", "upgrade", "head"]
     depends_on:
@@ -57,7 +57,7 @@ services:
 
   api:
     build: *api-build
-    image: drivempvd-api:local
+    image: drivempvd-api:${DRIVEMPVD_IMAGE_TAG:-local}
     <<: *backend-runtime
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
@@ -91,7 +91,7 @@ services:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
         VITE_CSRF_COOKIE_NAME: ${VITE_CSRF_COOKIE_NAME:-drivempvd_csrf}
         VITE_CSRF_HEADER_NAME: ${VITE_CSRF_HEADER_NAME:-X-CSRF-Token}
-    image: drivempvd-frontend:local
+    image: drivempvd-frontend:${DRIVEMPVD_IMAGE_TAG:-local}
     healthcheck:
       test:
         [
@@ -118,7 +118,7 @@ services:
     build:
       context: .
       dockerfile: docker/nginx/Dockerfile
-    image: drivempvd-nginx:local
+    image: drivempvd-nginx:${DRIVEMPVD_IMAGE_TAG:-local}
     env_file:
       - ./docker/.env
     depends_on:
