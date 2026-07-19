@@ -3,8 +3,26 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "@/app/app";
+import {
+  getCurrentSession,
+  loginWithCookie,
+  logoutCurrentSession,
+  refreshAccessSession,
+} from "@/features/auth/api/auth-api";
 import { ApiClientError } from "@/shared/api/client";
 import { getHealth } from "@/shared/api/system";
+
+vi.mock("@/features/auth/api/auth-api", () => ({
+  getCurrentSession: vi.fn(),
+  loginWithCookie: vi.fn(),
+  logoutCurrentSession: vi.fn(),
+  refreshAccessSession: vi.fn(),
+  isAuthenticationFailure: (error: unknown) =>
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error.status === 401 || error.status === 403),
+}));
 
 vi.mock("@/shared/api/system", () => ({
   getHealth: vi.fn(),
@@ -16,8 +34,29 @@ const health = {
   version: "0.1.0",
 };
 
+const admin = {
+  adminId: "01912345-6789-7abc-8def-0123456789ab",
+  sessionId: "01912345-6789-7abc-8def-0123456789ac",
+  username: "Admin",
+};
+
+function authenticationError(status = 401, code = "auth.authentication_required") {
+  return new ApiClientError({ status, code, message: "Authentication required." });
+}
+
 describe("App", () => {
   beforeEach(() => {
+    vi.mocked(getCurrentSession).mockReset().mockResolvedValue(admin);
+    vi.mocked(loginWithCookie).mockReset().mockResolvedValue({
+      session_id: admin.sessionId,
+      token_type: "Bearer",
+      access_token: null,
+      refresh_token: null,
+      access_expires_at: "2026-07-18T22:00:00Z",
+      refresh_expires_at: "2026-07-25T22:00:00Z",
+    });
+    vi.mocked(logoutCurrentSession).mockReset().mockResolvedValue(undefined);
+    vi.mocked(refreshAccessSession).mockReset().mockResolvedValue(true);
     vi.mocked(getHealth).mockResolvedValue(health);
   });
 
@@ -25,7 +64,7 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      screen.getByRole("heading", {
+      await screen.findByRole("heading", {
         name: "Tu espacio personal, preparado para lo que sigue.",
       }),
     ).toBeInTheDocument();
@@ -37,7 +76,7 @@ describe("App", () => {
   it("permite abrir y cerrar la navegación móvil", async () => {
     const user = userEvent.setup();
     render(<App />);
-    const openButton = screen.getByRole("button", { name: "Abrir menú" });
+    const openButton = await screen.findByRole("button", { name: "Abrir menú" });
 
     await user.click(openButton);
     expect(openButton).toHaveAttribute("aria-expanded", "true");
@@ -53,7 +92,7 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const systemButton = screen.getByRole("button", {
+    const systemButton = await screen.findByRole("button", {
       name: /Tema del sistema/,
     });
     await user.click(systemButton);
@@ -104,7 +143,7 @@ describe("App", () => {
     );
     render(<App />);
 
-    expect(screen.getByText("Comprobando conexión")).toBeInTheDocument();
+    expect(await screen.findByText("Comprobando conexión")).toBeInTheDocument();
     resolveHealth?.(health);
     await waitFor(() => expect(screen.getByText("API disponible")).toBeVisible());
   });
@@ -115,7 +154,7 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      screen.getByRole("heading", { name: "Esta página no existe" }),
+      await screen.findByRole("heading", { name: "Esta página no existe" }),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: /Volver al inicio/ }));
     expect(
@@ -123,5 +162,78 @@ describe("App", () => {
         name: "Tu espacio personal, preparado para lo que sigue.",
       }),
     ).toBeVisible();
+  });
+
+  it("redirige al login cuando no existe una sesión", async () => {
+    vi.mocked(getCurrentSession).mockRejectedValue(authenticationError());
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Inicia sesión" })).toBeVisible();
+    expect(window.location.pathname).toBe("/login");
+  });
+
+  it("inicia sesión con cookies y recupera el destino privado", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getCurrentSession)
+      .mockRejectedValueOnce(authenticationError())
+      .mockResolvedValueOnce(admin);
+    window.history.replaceState(null, "", "/ruta-inexistente?origen=login");
+    render(<App />);
+
+    await user.type(await screen.findByLabelText("Usuario"), "  Admin  ");
+    await user.type(screen.getByLabelText("Contraseña"), "correct password");
+    await user.click(screen.getByRole("button", { name: "Entrar" }));
+
+    expect(loginWithCookie).toHaveBeenCalledWith({
+      username: "Admin",
+      password: "correct password",
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Esta página no existe" }),
+    ).toBeVisible();
+    expect(window.location.search).toBe("?origen=login");
+  });
+
+  it("valida el formulario y traduce credenciales incorrectas", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getCurrentSession).mockRejectedValue(authenticationError());
+    vi.mocked(loginWithCookie).mockRejectedValue(
+      authenticationError(401, "auth.invalid_credentials"),
+    );
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Entrar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Escribe tu usuario y contraseña.",
+    );
+
+    await user.type(screen.getByLabelText("Usuario"), "Admin");
+    await user.type(screen.getByLabelText("Contraseña"), "incorrecta");
+    await user.click(screen.getByRole("button", { name: "Entrar" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "El usuario o la contraseña no son correctos.",
+    );
+    expect(screen.getByLabelText("Contraseña")).toHaveValue("");
+  });
+
+  it("permite mostrar la contraseña y presenta errores de inicialización", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getCurrentSession).mockRejectedValue(new Error("API down"));
+    render(<App />);
+
+    expect(await screen.findByText(/No fue posible comprobar la sesión/)).toBeVisible();
+    const password = screen.getByLabelText("Contraseña");
+    expect(password).toHaveAttribute("type", "password");
+    await user.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
+    expect(password).toHaveAttribute("type", "text");
+  });
+
+  it("cierra la sesión y vuelve al acceso público", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Cerrar sesión" }));
+    expect(logoutCurrentSession).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("heading", { name: "Inicia sesión" })).toBeVisible();
   });
 });

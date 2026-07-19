@@ -1,8 +1,8 @@
 # Frontend de DriveMPVD
 
-SPA React/TypeScript organizada por funcionalidades. La base incluye el shell
-responsive, temas, router, caché de datos y un cliente HTTP central compatible
-con el envelope del backend.
+SPA React/TypeScript organizada por funcionalidades. Incluye shell responsive,
+temas, autenticación por cookies, rutas protegidas, caché de datos y un cliente
+HTTP central compatible con el envelope del backend.
 
 ## Requisitos
 
@@ -44,12 +44,17 @@ src/
   test/         Configuración común de Vitest
 ```
 
-Los componentes no llaman a `fetch` directamente. Cada feature futura expondrá
-una API pública y utilizará `shared/api`; el estado remoto se mantendrá paginado
-y nunca contendrá el árbol completo ni bytes de archivos.
+Los componentes no llaman a `fetch` directamente. Cada feature expone una API
+pública y utiliza `shared/api`; el estado remoto se mantendrá paginado y nunca
+contendrá el árbol completo ni bytes de archivos.
 
-## Alcance actual
+## Autenticación local
 
-La Fase 3.1 no incluye login, rutas protegidas, explorador ni transferencias. La
-navegación correspondiente aparece deshabilitada deliberadamente hasta que cada
-incremento implemente y pruebe su comportamiento real.
+El frontend usa cookies del backend y no almacena JWT, contraseña ni usuario en
+`localStorage`. Para desarrollo HTTP, configura
+`DRIVEMPVD_AUTH_COOKIE_SECURE=false` en el backend si el navegador no admite la
+excepción segura de `localhost`; producción siempre debe utilizar HTTPS y
+cookies `Secure`.
+
+El explorador y las transferencias siguen deshabilitados deliberadamente hasta
+que sus incrementos implementen y prueben el comportamiento real.

@@ -93,3 +93,11 @@ IP o user-agent en claro. Los detalles son cerrados y no contienen secretos.
 - La confianza en IP depende de configurar correctamente proxies de Uvicorn/Nginx.
 - Los eventos aún no tienen retención/alertas ni exportación SIEM.
 - Multiusuario/RBAC exige migración explícita; no hay permisos latentes o falsos.
+
+## Integración SPA implementada
+
+La Fase 4 implementa login, sesión global, guards, logout y refresh serializado
+en React. La SPA solicita siempre entrega por cookie, no persiste credenciales ni
+tokens y obtiene el CSRF de su cookie pública justo antes de cada mutación. Un
+401 intenta una sola renovación; si la sesión expiró o fue revocada, limpia la
+caché y redirige al login conservando únicamente un destino interno validado.

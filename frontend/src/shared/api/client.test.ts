@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiClient } from "@/shared/api/client";
+import { ApiClient, readBrowserCookie } from "@/shared/api/client";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -15,6 +15,24 @@ function successEnvelope(data: unknown) {
     error: null,
     meta: { request_id: "request-1", next_cursor: null },
   };
+}
+
+function errorResponse(
+  status = 401,
+  code = "auth.authentication_required",
+  headers: Record<string, string> = {},
+) {
+  return new Response(
+    JSON.stringify({
+      data: null,
+      error: { code, message: "Authentication required.", details: [] },
+      meta: { request_id: "request-auth", next_cursor: null },
+    }),
+    {
+      status,
+      headers: { "content-type": "application/json", ...headers },
+    },
+  );
 }
 
 describe("ApiClient", () => {
@@ -129,5 +147,111 @@ describe("ApiClient", () => {
       code: "http.500",
       message: "La solicitud no pudo completarse.",
     });
+  });
+
+  it("envía el CSRF legible únicamente en métodos mutables", async () => {
+    document.cookie = "drivempvd_csrf=token%20seguro; path=/";
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementation(() =>
+        Promise.resolve(jsonResponse(successEnvelope({ ok: true }))),
+      );
+    const client = new ApiClient("/api/v1", fetchMock);
+
+    await client.request("health");
+    await client.request("folders", { method: "POST", body: "{}" });
+
+    const safeHeaders = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    const mutationHeaders = new Headers(fetchMock.mock.calls[1]?.[1]?.headers);
+    expect(safeHeaders.has("X-CSRF-Token")).toBe(false);
+    expect(mutationHeaders.get("X-CSRF-Token")).toBe("token seguro");
+    expect(readBrowserCookie("drivempvd_csrf")).toBe("token seguro");
+  });
+
+  it("respeta una cabecera CSRF explícita y tolera cookies mal codificadas", async () => {
+    document.cookie = "drivempvd_csrf=%E0%A4%A; path=/";
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse(successEnvelope({ ok: true })));
+
+    await new ApiClient("/api/v1", fetchMock).request("folders", {
+      method: "DELETE",
+      headers: { "X-CSRF-Token": "explicit" },
+    });
+
+    expect(readBrowserCookie("drivempvd_csrf")).toBeNull();
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("X-CSRF-Token")).toBe(
+      "explicit",
+    );
+  });
+
+  it("renueva una sesión una vez y repite la solicitud original", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(errorResponse())
+      .mockResolvedValueOnce(jsonResponse(successEnvelope({ username: "Admin" })));
+    const refresh = vi.fn().mockResolvedValue(true);
+    const client = new ApiClient("/api/v1", fetchMock);
+    client.setUnauthorizedHandler(refresh);
+
+    await expect(client.request("/auth/session")).resolves.toEqual({
+      username: "Admin",
+    });
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("no repite un 401 si la renovación falla o está deshabilitada", async () => {
+    const failedRefreshFetch = vi.fn<typeof fetch>().mockResolvedValue(errorResponse());
+    const noRetryFetch = vi.fn<typeof fetch>().mockResolvedValue(errorResponse());
+    const refresh = vi.fn().mockResolvedValue(false);
+    const client = new ApiClient("/api/v1", failedRefreshFetch);
+    client.setUnauthorizedHandler(refresh);
+
+    await expect(client.request("/auth/session")).rejects.toMatchObject({
+      status: 401,
+    });
+    await expect(
+      new ApiClient("/api/v1", noRetryFetch).request(
+        "/auth/login",
+        { method: "POST" },
+        { retryUnauthorized: false },
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(failedRefreshFetch).toHaveBeenCalledOnce();
+  });
+
+  it("acepta envelopes exitosos sin datos y renueva logout si es necesario", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(errorResponse())
+      .mockResolvedValueOnce(jsonResponse(successEnvelope(null)));
+    const client = new ApiClient("/api/v1", fetchMock);
+    client.setUnauthorizedHandler(vi.fn().mockResolvedValue(true));
+
+    await expect(
+      client.requestVoid("/auth/logout", { method: "POST" }),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("propaga Retry-After como segundos cuando es válido", async () => {
+    const limitedFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        errorResponse(429, "auth.rate_limit_exceeded", { "Retry-After": "42" }),
+      );
+    const invalidFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        errorResponse(429, "auth.rate_limit_exceeded", { "Retry-After": "tomorrow" }),
+      );
+
+    await expect(
+      new ApiClient("/api/v1", limitedFetch).request("/auth/login"),
+    ).rejects.toMatchObject({ retryAfterSeconds: 42 });
+    await expect(
+      new ApiClient("/api/v1", invalidFetch).request("/auth/login"),
+    ).rejects.toMatchObject({ retryAfterSeconds: null });
   });
 });

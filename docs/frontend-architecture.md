@@ -39,6 +39,10 @@ preferencias no sensibles se guardan localmente.
 | `trash` | Listado, restauración, borrado definitivo y vaciado |
 | `jobs` | Progreso de operaciones asíncronas y notificaciones |
 
+La feature `auth` quedó implementada en la Fase 4. Mantiene la identidad solo en
+memoria, usa cookies HttpOnly, inyecta CSRF en mutaciones, serializa refresh y
+protege rutas. Las demás features continúan sujetas a sus fases correspondientes.
+
 Cada feature exporta una superficie pública. No se importan internals de otra
 feature; la coordinación ocurre en layouts o mediante contratos de aplicación.
 

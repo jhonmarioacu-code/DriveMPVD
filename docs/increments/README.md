@@ -8,3 +8,4 @@
 - [Fase 2.6: subida streaming reanudable](phase-2-06-file-uploads.md)
 - [Fase 2.7: descarga y streaming RFC 9110](phase-2-07-download-streaming.md)
 - [Fase 3.1: base del frontend](phase-3-01-frontend-foundation.md)
+- [Fase 4: autenticación y endurecimiento del frontend](phase-4-authentication-frontend.md)

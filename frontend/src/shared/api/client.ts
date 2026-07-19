@@ -27,6 +27,7 @@ export class ApiClientError extends Error {
   readonly code: string;
   readonly details: ApiErrorDetail[];
   readonly requestId: string | null;
+  readonly retryAfterSeconds: number | null;
 
   constructor(options: {
     message: string;
@@ -34,6 +35,7 @@ export class ApiClientError extends Error {
     code: string;
     details?: ApiErrorDetail[];
     requestId?: string | null;
+    retryAfterSeconds?: number | null;
   }) {
     super(options.message);
     this.name = "ApiClientError";
@@ -41,10 +43,16 @@ export class ApiClientError extends Error {
     this.code = options.code;
     this.details = options.details ?? [];
     this.requestId = options.requestId ?? null;
+    this.retryAfterSeconds = options.retryAfterSeconds ?? null;
   }
 }
 
 type FetchImplementation = typeof globalThis.fetch;
+type UnauthorizedHandler = () => Promise<boolean>;
+
+export interface ApiRequestOptions {
+  retryUnauthorized?: boolean;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -62,9 +70,28 @@ function joinUrl(baseUrl: string, path: string) {
   return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+function isSafeMethod(method: string) {
+  return ["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+}
+
+export function readBrowserCookie(name: string) {
+  const prefix = `${encodeURIComponent(name)}=`;
+  const item = document.cookie
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(prefix));
+  if (item === undefined) return null;
+  try {
+    return decodeURIComponent(item.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
 export class ApiClient {
   readonly #baseUrl: string;
   readonly #fetch: FetchImplementation;
+  #unauthorizedHandler: UnauthorizedHandler | null = null;
 
   constructor(
     baseUrl = environment.apiBaseUrl,
@@ -74,11 +101,70 @@ export class ApiClient {
     this.#fetch = fetchImplementation;
   }
 
-  async request<Data>(path: string, init: RequestInit = {}): Promise<Data> {
+  setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
+    this.#unauthorizedHandler = handler;
+  }
+
+  async request<Data>(
+    path: string,
+    init: RequestInit = {},
+    options: ApiRequestOptions = {},
+  ): Promise<Data> {
+    try {
+      return await this.#request<Data>(path, init, false);
+    } catch (error) {
+      const unauthorizedHandler = this.#unauthorizedHandler;
+      const shouldRefresh =
+        options.retryUnauthorized !== false &&
+        error instanceof ApiClientError &&
+        error.status === 401 &&
+        unauthorizedHandler !== null;
+      if (!shouldRefresh) throw error;
+
+      const refreshed = await unauthorizedHandler();
+      if (!refreshed) throw error;
+      return this.#request<Data>(path, init, false);
+    }
+  }
+
+  async requestVoid(
+    path: string,
+    init: RequestInit = {},
+    options: ApiRequestOptions = {},
+  ): Promise<void> {
+    try {
+      await this.#request<null>(path, init, true);
+    } catch (error) {
+      const unauthorizedHandler = this.#unauthorizedHandler;
+      const shouldRefresh =
+        options.retryUnauthorized !== false &&
+        error instanceof ApiClientError &&
+        error.status === 401 &&
+        unauthorizedHandler !== null;
+      if (!shouldRefresh) throw error;
+
+      const refreshed = await unauthorizedHandler();
+      if (!refreshed) throw error;
+      await this.#request<null>(path, init, true);
+    }
+  }
+
+  async #request<Data>(
+    path: string,
+    init: RequestInit,
+    allowNullData: boolean,
+  ): Promise<Data> {
     const headers = new Headers(init.headers);
+    const method = init.method ?? "GET";
     if (!headers.has("Accept")) headers.set("Accept", "application/json");
     if (init.body !== undefined && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
+    }
+    if (!isSafeMethod(method) && !headers.has(environment.csrfHeaderName)) {
+      const csrfToken = readBrowserCookie(environment.csrfCookieName);
+      if (csrfToken !== null) {
+        headers.set(environment.csrfHeaderName, csrfToken);
+      }
     }
 
     const response = await this.#fetch(joinUrl(this.#baseUrl, path), {
@@ -115,10 +201,11 @@ export class ApiClient {
         message: error?.message ?? "La solicitud no pudo completarse.",
         details: error?.details ?? [],
         requestId: payload.meta.request_id,
+        retryAfterSeconds: parseRetryAfter(response.headers.get("retry-after")),
       });
     }
 
-    if (payload.data === null) {
+    if (payload.data === null && !allowNullData) {
       throw new ApiClientError({
         status: response.status,
         code: "client.missing_data",
@@ -129,6 +216,12 @@ export class ApiClient {
 
     return payload.data as Data;
   }
+}
+
+function parseRetryAfter(value: string | null) {
+  if (value === null) return null;
+  const seconds = Number.parseInt(value, 10);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
 
 export const apiClient = new ApiClient();

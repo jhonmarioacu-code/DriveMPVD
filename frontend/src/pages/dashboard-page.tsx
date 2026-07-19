@@ -100,14 +100,14 @@ export function DashboardPage() {
   return (
     <div className="animate-enter">
       <div className="max-w-3xl">
-        <p className="eyebrow">Fase 3.1 · Base del frontend</p>
+        <p className="eyebrow">Fase 4 · Sesión protegida</p>
         <h1 className="mt-3 text-3xl leading-tight font-bold tracking-tight text-balance sm:text-4xl">
           Tu espacio personal, preparado para lo que sigue.
         </h1>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-muted sm:text-base">
-          La aplicación base ya integra navegación, temas, accesibilidad y el contrato
-          HTTP. El acceso a tus archivos se habilitará después de integrar la sesión del
-          administrador.
+          La aplicación ya integra navegación, temas y accesibilidad. Tu sesión
+          administradora utiliza cookies seguras, protección CSRF y renovación
+          automática.
         </p>
       </div>
 
@@ -130,7 +130,7 @@ export function DashboardPage() {
             </h2>
           </div>
           <span className="hidden items-center gap-1 text-xs font-semibold text-brand sm:flex">
-            Siguiente: autenticación
+            Siguiente: explorador
             <ArrowRight aria-hidden="true" className="size-3.5" />
           </span>
         </div>

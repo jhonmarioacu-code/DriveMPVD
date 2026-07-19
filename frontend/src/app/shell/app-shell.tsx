@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 
+import { SessionControls } from "@/features/auth/ui/session-controls";
 import { ThemeSwitcher } from "@/shared/ui/theme-switcher";
 import { cn } from "@/shared/utils/cn";
 
@@ -70,7 +71,7 @@ function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="m-4 rounded-2xl border border-border bg-surface-raised p-4">
-        <p className="text-xs font-semibold text-foreground">Frontend base</p>
+        <p className="text-xs font-semibold text-foreground">Sesión protegida</p>
         <p className="mt-1 text-xs leading-relaxed text-muted">
           El explorador se habilitará en su incremento correspondiente.
         </p>
@@ -159,10 +160,9 @@ export function AppShell() {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              <span className="hidden text-xs text-muted md:inline">
-                Acceso local y privado
-              </span>
               <ThemeSwitcher />
+              <span aria-hidden="true" className="mx-1 h-6 w-px bg-border" />
+              <SessionControls />
             </div>
           </div>
         </header>

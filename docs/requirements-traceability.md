@@ -6,7 +6,7 @@ en la Fase 1.
 
 | Requisito | Decisión/contrato | Fase principal |
 |---|---|---|
-| Usuario único y login | Singleton `AdminAccount`, sin registro/roles | 2.3 implementado |
+| Usuario único y login | Singleton `AdminAccount`, sin registro/roles | 2.3 backend y 4 frontend implementados |
 | Crear, renombrar, mover, copiar y borrar | Entidades, commands, UoW y REST | 2.5 API implementada |
 | Carpetas y subcarpetas | Adyacencia, CTE y listado keyset | 2.5 API implementada |
 | Lista, cuadrícula, breadcrumb y menú | App shell/features virtualizadas | 3 y 5 |
@@ -22,8 +22,8 @@ en la Fase 1.
 | Orden nombre/fecha/tamaño/tipo | Keyset con desempate por id | 2.5 implementado |
 | Favoritos y recientes | Módulo `activity` | 5 |
 | Papelera/restaurar/vaciar | REST para trash/restore/purge; vaciado futuro | 2.5 parcial implementado |
-| Argon2, JWT, CSRF y rate limit | Cookies HttpOnly, refresh rotatorio, PostgreSQL | 2.3 implementado |
-| Headers y validación de subida | Nginx, middleware y value objects | 4 y 6 |
+| Argon2, JWT, CSRF y rate limit | Cookies HttpOnly, refresh rotatorio, PostgreSQL | 2.3 backend y 4 frontend implementados |
+| Headers y validación de subida | CSRF cliente; Nginx, middleware y value objects | 4 cliente implementado; 6 y 9 |
 | Protección path traversal | Blob UUID y confinamiento de raíz | 2 y 6 |
 | Solo `/data/storage` | Object store local sharded | 2 |
 | 500k archivos/100k carpetas | Índices, cursores, queries proyectadas | 2 y 9 |
