@@ -6,15 +6,15 @@ DDD, FastAPI y PostgreSQL en el backend, y React en el frontend.
 
 ## Estado
 
-La **Fase 1 — Arquitectura** está terminada. En esta fase no se ha implementado
-funcionalidad ejecutable ni se han creado configuraciones de despliegue
-incompletas.
+La arquitectura y el backend hasta el incremento 2.7 están terminados. La base
+ejecutable del frontend quedó validada en el incremento 3.1; autenticación es el
+siguiente incremento y no se ha iniciado todavía.
 
 | Fase | Alcance | Estado |
 |---|---|---|
 | 1 | Arquitectura, límites, contratos y estructura | Terminada |
-| 2 | Backend, almacenamiento y transferencias | En curso — incremento 2.7 |
-| 3 | Frontend base | Pendiente |
+| 2 | Backend, almacenamiento y transferencias | Terminada — incrementos 2.1–2.7 |
+| 3 | Frontend base | Terminada — incremento 3.1 |
 | 4 | Autenticación y endurecimiento | Pendiente |
 | 5 | Explorador de archivos | Pendiente |
 | 6 | Subidas normales y reanudables | Pendiente |

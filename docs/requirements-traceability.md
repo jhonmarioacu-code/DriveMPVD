@@ -28,10 +28,10 @@ en la Fase 1.
 | Solo `/data/storage` | Object store local sharded | 2 |
 | 500k archivos/100k carpetas | Índices, cursores, queries proyectadas | 2 y 9 |
 | REST, Swagger y OpenAPI | `/api/v1`, envelope y contrato generado | 2.5 almacenamiento implementado |
-| Responsive, temas y notificaciones | Tokens, app shell y feedback por commands | 3 |
+| Responsive, temas y notificaciones | Shell/temas en 3.1; feedback por commands futuro | 3.1 implementado; 5–7 |
 | Atajos de teclado | Commands compartidos y control de foco | 5 |
 | 80 % de cobertura | Umbral de líneas/ramas y pirámide definida | 10 |
-| Type hints y calidad | Type checker, Ruff/Black, ESLint/Prettier | 2, 3 y 10 |
+| Type hints y calidad | Type checker, Ruff/Black, ESLint/Prettier | 2 y 3.1 implementados; 10 |
 | Docker Compose y Nginx | Topología de cuatro servicios | 2–4 y 9 |
 | Ubuntu 24.04 | Guía y verificación de host | 9 |
 | Instalar/actualizar/backup/restaurar | Procedimientos verificables previstos | 9 |
@@ -44,7 +44,7 @@ en la Fase 1.
 | API docs automáticas | FastAPI OpenAPI como fuente única | 2 |
 | Storage intercambiable | Puerto streaming y adaptador local | 2.6 local implementado; S3/MinIO futuro |
 | PostgreSQL Full Text futuro | Puerto de búsqueda y evolución `tsvector`/GIN | 5 y 9 |
-| Versiones mínimas | Python 3.13, PostgreSQL 16, React 19, TypeScript 5.x | 2 y 3 |
+| Versiones mínimas | Python 3.13, PostgreSQL 16, React 19, TypeScript 5.x | 2 y 3.1 implementados |
 | Sin librerías experimentales | Solo releases estables y mantenidas | Transversal |
 
 ## Criterio de fase
