@@ -7,20 +7,21 @@ DDD, FastAPI y PostgreSQL en el backend, y React en el frontend.
 ## Estado
 
 La arquitectura, el backend hasta el incremento 2.7, la base del frontend, la
-autenticación web, el explorador y las subidas reanudables están terminados.
+autenticación web, el explorador, las subidas reanudables y la visualización de
+archivos están terminados.
 
-| Fase | Alcance | Estado |
-|---|---|---|
-| 1 | Arquitectura, límites, contratos y estructura | Terminada |
-| 2 | Backend, almacenamiento y transferencias | Terminada — incrementos 2.1–2.7 |
-| 3 | Frontend base | Terminada — incremento 3.1 |
-| 4 | Autenticación y endurecimiento | Terminada |
-| 5 | Explorador de archivos | Terminada |
-| 6 | Subidas normales y reanudables | Terminada |
-| 7 | Visualizadores y miniaturas | Pendiente |
-| 8 | Streaming y Range Requests | Pendiente |
-| 9 | Optimización y operación | Pendiente |
-| 10 | Pruebas y cobertura final | Pendiente |
+| Fase | Alcance                                           | Estado                          |
+| ---- | ------------------------------------------------- | ------------------------------- |
+| 1    | Arquitectura, límites, contratos y estructura     | Terminada                       |
+| 2    | Backend, almacenamiento y transferencias          | Terminada — incrementos 2.1–2.7 |
+| 3    | Frontend base                                     | Terminada — incremento 3.1      |
+| 4    | Autenticación y endurecimiento                    | Terminada                       |
+| 5    | Explorador de archivos                            | Terminada                       |
+| 6    | Subidas normales y reanudables                    | Terminada                       |
+| 7    | Visualizadores, miniaturas, streaming y descargas | Terminada                       |
+| 8    | Docker Compose y Nginx                            | Pendiente                       |
+| 9    | Optimización y operación                          | Pendiente                       |
+| 10   | Pruebas y cobertura final                         | Pendiente                       |
 
 ## Documentación de arquitectura
 

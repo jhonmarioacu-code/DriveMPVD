@@ -1,7 +1,7 @@
 """HTTP adapter for storage metadata commands and queries."""
 
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, status
@@ -56,6 +56,7 @@ from app.presentation.file_delivery import (
     base_download_headers,
     evaluate_preconditions,
     file_etag,
+    is_inline_media_type,
     multipart_boundary,
     multipart_length,
     parse_ranges,
@@ -577,8 +578,21 @@ def create_storage_router(
         summary="Stream file content",
         openapi_extra=_download_openapi(),
     )
-    async def download_file(file_id: UUID, request: Request) -> Response:
-        return await _download_response(use_cases, file_id, request, head_only=False)
+    async def download_file(
+        file_id: UUID,
+        request: Request,
+        disposition: Annotated[
+            Literal["attachment", "inline"],
+            Query(description="Content-Disposition mode for safe browser previews."),
+        ] = "attachment",
+    ) -> Response:
+        return await _download_response(
+            use_cases,
+            file_id,
+            request,
+            head_only=False,
+            disposition=disposition,
+        )
 
     @router.head(
         "/files/{file_id}/content",
@@ -586,8 +600,21 @@ def create_storage_router(
         summary="Inspect file delivery metadata",
         openapi_extra=_download_openapi(),
     )
-    async def inspect_file(file_id: UUID, request: Request) -> Response:
-        return await _download_response(use_cases, file_id, request, head_only=True)
+    async def inspect_file(
+        file_id: UUID,
+        request: Request,
+        disposition: Annotated[
+            Literal["attachment", "inline"],
+            Query(description="Content-Disposition mode for safe browser previews."),
+        ] = "attachment",
+    ) -> Response:
+        return await _download_response(
+            use_cases,
+            file_id,
+            request,
+            head_only=True,
+            disposition=disposition,
+        )
 
     return router
 
@@ -693,6 +720,7 @@ async def _download_response(
     request: Request,
     *,
     head_only: bool,
+    disposition: Literal["attachment", "inline"] = "attachment",
 ) -> Response:
     principal = require_principal(request)
     file = await use_cases.prepare_download.execute(
@@ -700,7 +728,16 @@ async def _download_response(
         file_id=file_id,
     )
     etag = file_etag(file)
-    headers = base_download_headers(file, etag=etag)
+    effective_disposition: Literal["attachment", "inline"] = (
+        "inline"
+        if disposition == "inline" and is_inline_media_type(file.mime_type)
+        else "attachment"
+    )
+    headers = base_download_headers(
+        file,
+        etag=etag,
+        disposition=effective_disposition,
+    )
     request_headers = {
         name.casefold(): value for name, value in request.headers.items()
     }

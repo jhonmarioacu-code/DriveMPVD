@@ -30,6 +30,10 @@ collations, locks, extensiones e índices son parte del producto.
 - Repetición idempotente y fallos entre blob y commit.
 - Chunks fuera de orden, truncados, repetidos, excedidos y reanudados.
 - Rangos válidos, múltiples, no satisfacibles y condicionales.
+- Entrega `inline` solo para MIME seguros, preflight `HEAD`, visores nativos y
+  fallbacks de descarga ante tipo no compatible o error multimedia.
+- Umbral de miniatura: imagen raster pequeña perezosa, y placeholder para
+  vídeo, PDF, tamaño desconocido o blob grande.
 - Tokens expirados/revocados, rotación, reutilización de refresh y CSRF ausente.
 - Paginación sin duplicados/omisiones bajo orden estable.
 - Archivos maliciosos o corruptos para imagen, video y PDF.

@@ -38,7 +38,7 @@ Las pruebas exigen al menos 80 % de líneas, sentencias, funciones y ramas.
 ```text
 src/
   app/          Providers, router y shell de aplicación
-  features/     Funcionalidades aisladas: auth, explorer y uploads
+  features/     Funcionalidades aisladas: auth, explorer, uploads y viewers
   pages/        Composición de páginas por ruta
   shared/       Cliente API, configuración, UI y utilidades transversales
   styles/       Tokens y estilos globales
@@ -80,4 +80,24 @@ lo que esa selección no se expone todavía. La reanudación funciona mientras l
 SPA conserva el archivo seleccionado; una recarga completa requiere seleccionar
 el archivo otra vez.
 
-Visualizadores y miniaturas pertenecen a la Fase 7.
+## Visualizadores, streaming y descargas
+
+Desde el explorador se puede abrir una vista previa de imágenes, vídeo, audio y
+PDF. Imágenes usan controles de zoom y rotación; vídeo y audio usan los
+elementos nativos HTML5, y PDF usa el visor nativo del navegador. Antes de
+crear un visor, la SPA comprueba mediante `HEAD` que el backend acepta la
+entrega `inline`; ante un error, codec no compatible o formato no admitido,
+mantiene las acciones de descarga y de apertura aparte.
+
+La descarga usa `GET /storage/files/{id}/content` con su disposición
+`attachment` predeterminada. Las vistas previas usan
+`?disposition=inline`, una opción que el backend restringe a MIME seguros; una
+extensión no puede convertir HTML, SVG u otro contenido activo en una vista
+previa. Los elementos nativos aprovechan las cookies de sesión del mismo origen
+y las respuestas Range del backend, sin copiar el archivo a memoria JavaScript.
+
+Las miniaturas de listado son deliberadamente acotadas: una imagen raster de
+hasta 1 MiB se carga con `loading="lazy"`; vídeo, PDF, imágenes grandes,
+tamaños desconocidos y errores muestran un placeholder. No hay aún worker ni
+endpoint de derivados del backend, por lo que el explorador no descarga un blob
+grande solo para fabricar una miniatura en el cliente.

@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import format_datetime, parsedate_to_datetime
+from typing import Literal
 from urllib.parse import quote
 
 from app.application.dtos.storage import FileDownloadDTO
@@ -17,6 +18,28 @@ from app.application.ports.download_services import (
 from app.application.ports.file_storage import ByteRangeDTO, FileStorageProvider
 
 _MAX_RANGES = 16
+_INLINE_MEDIA_TYPES = frozenset(
+    {
+        "application/pdf",
+        "audio/aac",
+        "audio/flac",
+        "audio/m4a",
+        "audio/mpeg",
+        "audio/mp4",
+        "audio/ogg",
+        "audio/wav",
+        "audio/webm",
+        "image/avif",
+        "image/gif",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "video/mp4",
+        "video/ogg",
+        "video/quicktime",
+        "video/webm",
+    }
+)
 
 
 class RangeRequestError(ValueError):
@@ -98,7 +121,16 @@ def parse_ranges(value: str | None, *, size: int) -> tuple[ResolvedByteRange, ..
     return _coalesce_ranges(resolved)
 
 
-def content_disposition(filename: str) -> str:
+def is_inline_media_type(mime_type: str) -> bool:
+    """Limit inline delivery to media types the browser can render safely."""
+    return mime_type.casefold() in _INLINE_MEDIA_TYPES
+
+
+def content_disposition(
+    filename: str,
+    *,
+    disposition: Literal["attachment", "inline"] = "attachment",
+) -> str:
     normalized = unicodedata.normalize("NFKD", filename)
     fallback = normalized.encode("ascii", "ignore").decode()
     fallback = (
@@ -113,10 +145,15 @@ def content_disposition(filename: str) -> str:
         or "download"
     )
     encoded = quote(filename, safe="")
-    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
+    return f"{disposition}; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
-def base_download_headers(file: FileDownloadDTO, *, etag: str) -> dict[str, str]:
+def base_download_headers(
+    file: FileDownloadDTO,
+    *,
+    etag: str,
+    disposition: Literal["attachment", "inline"] = "attachment",
+) -> dict[str, str]:
     return {
         "Accept-Ranges": "bytes",
         "ETag": etag,
@@ -125,7 +162,11 @@ def base_download_headers(file: FileDownloadDTO, *, etag: str) -> dict[str, str]
             usegmt=True,
         ),
         "Cache-Control": "private, max-age=0, must-revalidate",
-        "Content-Disposition": content_disposition(file.filename),
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": content_disposition(
+            file.filename,
+            disposition=disposition,
+        ),
     }
 
 

@@ -1,9 +1,13 @@
 import { fileContentUrl } from "@/features/explorer/api/explorer-api";
+import type { ContentDisposition } from "@/shared/api/storage-content";
 
 import type { StorageEntry } from "@/features/explorer/model/types";
 
-export function openFile(entry: StorageEntry) {
-  window.open(fileContentUrl(entry.id), "_blank", "noopener,noreferrer");
+export function openFile(
+  entry: StorageEntry,
+  disposition: ContentDisposition = "attachment",
+) {
+  window.open(fileContentUrl(entry.id, disposition), "_blank", "noopener,noreferrer");
 }
 
 export function downloadFile(entry: StorageEntry) {

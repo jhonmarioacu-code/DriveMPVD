@@ -41,8 +41,11 @@ sintéticos de escala objetivo antes de fijarlos en migraciones.
 - Virtualización en listas/cuadrículas extensas.
 - Debounce y cancelación de búsquedas; cache por cursor y carpeta.
 - Subidas con concurrencia limitada, reanudación y progreso por bytes.
-- Miniaturas lazy-loaded; blobs grandes nunca entran en estado global.
-- Reproductores nativos HTML5 y visor PDF cargado bajo demanda.
+- Miniaturas perezosas y acotadas: solo imágenes raster de hasta 1 MiB intentan
+  cargar su fuente; blobs grandes nunca entran en estado global para producir
+  una miniatura.
+- Reproductores nativos HTML5 y visor PDF nativo bajo demanda, sobre el mismo
+  endpoint autenticado con Range; no hay copia de streams en memoria React.
 
 ## Servidor objetivo
 

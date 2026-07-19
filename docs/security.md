@@ -55,17 +55,21 @@ configuran separados para no interrumpir reproducción válida.
   metadatos. Una subida que excede 50 GB se cancela y elimina de staging.
 - MIME declarado es informativo; el servidor detecta contenido y sirve tipos
   peligrosos como adjunto. SVG/HTML no se muestran inline en el origen principal.
+- La entrega de bytes actual fija `X-Content-Type-Options: nosniff`; Nginx la
+  reforzará junto con el resto de cabeceras de producción en la Fase 8.
 - ZIP, RAR y 7Z se tratan como blobs; no se extraen automáticamente.
 
 El escaneo ClamAV será un módulo posterior. Hasta entonces no se ejecuta
 contenido subido ni se confía en macros o codecs fuera de procesos aislados y
 con límites.
 
-## Procesamiento de medios
+## Procesamiento de medios futuro
 
-FFmpeg y renderizadores reciben solo claves internas, se ejecutan sin red, con
+No hay worker de medios operativo todavía. Cuando se incorpore, FFmpeg y los
+renderizadores recibirán solo claves internas, se ejecutarán sin red, con
 usuario no privilegiado, límites de CPU/memoria/tiempo y salida controlada. Los
-fallos generan una miniatura genérica y un error sanitizado.
+fallos generarán una miniatura genérica y un error sanitizado. La estrategia
+actual de placeholders no ejecuta ni procesa contenido subido en el cliente.
 
 ## Contenedores y host
 

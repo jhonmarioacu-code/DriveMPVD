@@ -1,5 +1,8 @@
 import { apiClient } from "@/shared/api/client";
-import { environment } from "@/shared/config/environment";
+import {
+  storageContentUrl,
+  type ContentDisposition,
+} from "@/shared/api/storage-content";
 
 import type {
   ExplorerListOptions,
@@ -88,6 +91,9 @@ export function trashEntry(entryId: string) {
   );
 }
 
-export function fileContentUrl(fileId: string) {
-  return `${environment.apiBaseUrl}/storage/files/${encodeURIComponent(fileId)}/content`;
+export function fileContentUrl(
+  fileId: string,
+  disposition: ContentDisposition = "attachment",
+) {
+  return storageContentUrl(fileId, disposition);
 }

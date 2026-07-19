@@ -4,6 +4,7 @@ import {
   CheckSquare2,
   ChevronRight,
   Download,
+  Eye,
   ExternalLink,
   FolderPlus,
   LoaderCircle,
@@ -29,6 +30,7 @@ import {
 } from "@/features/explorer/model/formatters";
 import { downloadFile, openFile } from "@/features/explorer/model/file-actions";
 import { useUploads } from "@/features/uploads";
+import { EntryThumbnail, FileViewerDialog, isPreviewable } from "@/features/viewers";
 import {
   CreateFolderDialog,
   FileDetailsDialog,
@@ -97,7 +99,11 @@ function EntryRow({
               : "bg-surface-raised text-muted",
           )}
         >
-          <EntryIcon entry={entry} />
+          {entry.kind === "file" ? (
+            <EntryThumbnail file={entry} />
+          ) : (
+            <EntryIcon entry={entry} />
+          )}
         </span>
         <span className="min-w-0">
           <span className="block truncate text-sm font-semibold">{entry.name}</span>
@@ -143,6 +149,7 @@ export function FileExplorerPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const [detailsEntry, setDetailsEntry] = useState<StorageEntry | null>(null);
+  const [previewEntry, setPreviewEntry] = useState<StorageEntry | null>(null);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,6 +172,8 @@ export function FileExplorerPage() {
   );
   const singleSelection =
     selectedEntries.length === 1 ? (selectedEntries.at(0) ?? null) : null;
+  const canPreviewSelection =
+    singleSelection?.kind === "file" && isPreviewable(singleSelection);
 
   const clearSelection = () => setSelectedIds(new Set());
   const resetLocationState = () => {
@@ -172,6 +181,7 @@ export function FileExplorerPage() {
     setSearch("");
     setActiveDialog(null);
     setDetailsEntry(null);
+    setPreviewEntry(null);
   };
 
   const openEntry = (entry: StorageEntry) => {
@@ -190,6 +200,12 @@ export function FileExplorerPage() {
       else next.add(entryId);
       return next;
     });
+  };
+
+  const previewFile = (entry: StorageEntry) => {
+    if (entry.kind !== "file" || !isPreviewable(entry)) return;
+    setDetailsEntry(null);
+    setPreviewEntry(entry);
   };
 
   const allSelected =
@@ -326,6 +342,15 @@ export function FileExplorerPage() {
           >
             <ExternalLink aria-hidden="true" className="size-4" />
             Abrir
+          </Button>
+          <Button
+            disabled={!canPreviewSelection}
+            onClick={() => singleSelection && previewFile(singleSelection)}
+            size="sm"
+            variant="secondary"
+          >
+            <Eye aria-hidden="true" className="size-4" />
+            Vista previa
           </Button>
           <Button
             disabled={singleSelection === null}
@@ -574,10 +599,20 @@ export function FileExplorerPage() {
       ) : null}
       {detailsEntry === null ? null : (
         <FileDetailsDialog
+          canPreview={isPreviewable(detailsEntry)}
           entry={detailsEntry}
           onClose={() => setDetailsEntry(null)}
           onDownload={() => downloadFile(detailsEntry)}
           onOpen={() => openFile(detailsEntry)}
+          onPreview={() => previewFile(detailsEntry)}
+        />
+      )}
+      {previewEntry === null ? null : (
+        <FileViewerDialog
+          file={previewEntry}
+          onClose={() => setPreviewEntry(null)}
+          onDownload={() => downloadFile(previewEntry)}
+          onOpenInNewTab={() => openFile(previewEntry, "inline")}
         />
       )}
     </div>

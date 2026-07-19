@@ -762,6 +762,7 @@ async def test_full_download_and_head_return_safe_complete_headers(
     assert head.headers["Accept-Ranges"] == "bytes"
     assert head.headers["Content-Length"] == str(len(content))
     assert head.headers["Content-Type"] == "application/pdf"
+    assert head.headers["Content-Disposition"].startswith("attachment;")
     assert (
         "filename*=UTF-8''r%C3%A9sum%C3%A9.pdf" in head.headers["Content-Disposition"]
     )
@@ -772,6 +773,45 @@ async def test_full_download_and_head_return_safe_complete_headers(
     assert downloaded.headers["ETag"] == head.headers["ETag"]
     assert downloaded.headers["Last-Modified"].endswith("GMT")
     assert downloaded.headers["Cache-Control"].startswith("private")
+    assert downloaded.headers["X-Content-Type-Options"] == "nosniff"
+
+
+async def test_inline_downloads_are_limited_to_safe_browser_media(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    pdf = await _upload_completed_file(
+        context,
+        filename="preview.pdf",
+        content=b"%PDF-1.7\npreview\n%%EOF",
+        mime_type="application/pdf",
+    )
+    pdf_path = f"/api/v1/storage/files/{pdf['id']}/content"
+
+    inline_pdf = await context.client.head(
+        pdf_path,
+        headers=context.headers,
+        params={"disposition": "inline"},
+    )
+    assert inline_pdf.status_code == 200
+    assert inline_pdf.content == b""
+    assert inline_pdf.headers["Content-Disposition"].startswith("inline;")
+
+    binary = await _upload_completed_file(
+        context,
+        filename="archive.txt",
+        content=b"not browser media",
+        mime_type="application/octet-stream",
+    )
+    binary_path = f"/api/v1/storage/files/{binary['id']}/content"
+    rejected_inline = await context.client.get(
+        binary_path,
+        headers=context.headers,
+        params={"disposition": "inline"},
+    )
+    assert rejected_inline.status_code == 200
+    assert rejected_inline.content == b"not browser media"
+    assert rejected_inline.headers["Content-Disposition"].startswith("attachment;")
 
 
 async def test_ranges_multipart_and_conditional_downloads(

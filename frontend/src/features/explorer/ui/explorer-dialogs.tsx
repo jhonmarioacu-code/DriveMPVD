@@ -335,15 +335,19 @@ export function MoveEntriesDialog({
 }
 
 export function FileDetailsDialog({
+  canPreview,
   entry,
   onClose,
   onDownload,
   onOpen,
+  onPreview,
 }: {
+  canPreview: boolean;
   entry: StorageEntry;
   onClose: () => void;
   onDownload: () => void;
   onOpen: () => void;
+  onPreview: () => void;
 }) {
   const details = useFileDetails(entry.id);
   return (
@@ -353,6 +357,11 @@ export function FileDetailsDialog({
           <Button onClick={onDownload} type="button" variant="secondary">
             Descargar
           </Button>
+          {canPreview ? (
+            <Button onClick={onPreview} type="button" variant="secondary">
+              Vista previa
+            </Button>
+          ) : null}
           <Button onClick={onOpen} type="button">
             Abrir
           </Button>

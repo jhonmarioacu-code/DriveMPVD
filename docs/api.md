@@ -26,24 +26,24 @@ y `request_id`.
 
 ## Recursos implementados
 
-| Área | Rutas principales |
-|---|---|
-| Sesión | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/sessions/revoke-all`, `GET /auth/session` |
-| Navegación | `GET /storage/navigation`, `GET /storage/folders/{folder_id}/entries`, `GET /storage/files/{file_id}` |
-| Contenido | `GET/HEAD /storage/files/{file_id}/content` |
-| Carpetas | `POST /storage/folders` |
+| Área       | Rutas principales                                                                                                                       |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Sesión     | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/sessions/revoke-all`, `GET /auth/session`                    |
+| Navegación | `GET /storage/navigation`, `GET /storage/folders/{folder_id}/entries`, `GET /storage/files/{file_id}`                                   |
+| Contenido  | `GET/HEAD /storage/files/{file_id}/content`                                                                                             |
+| Carpetas   | `POST /storage/folders`                                                                                                                 |
 | Mutaciones | `PATCH /storage/entries/{id}`, `POST /storage/entries/{id}/move`, `POST /storage/entries/{id}/copy`, `POST /storage/entries/{id}/trash` |
-| Papelera | `POST /storage/trash/{id}/restore`, `DELETE /storage/trash/{id}` |
-| Subidas | `POST /storage/uploads`, `HEAD/PATCH/DELETE /storage/uploads/{id}`, `POST /storage/uploads/{id}/complete` |
+| Papelera   | `POST /storage/trash/{id}/restore`, `DELETE /storage/trash/{id}`                                                                        |
+| Subidas    | `POST /storage/uploads`, `HEAD/PATCH/DELETE /storage/uploads/{id}`, `POST /storage/uploads/{id}/complete`                               |
 
 ## Recursos previstos
 
-| Área | Rutas principales |
-|---|---|
-| Búsqueda | `GET /search` |
+| Área      | Rutas principales                                                                 |
+| --------- | --------------------------------------------------------------------------------- |
+| Búsqueda  | `GET /search`                                                                     |
 | Actividad | `GET /recents`, `PUT /favorites/{id}`, `DELETE /favorites/{id}`, `GET /favorites` |
-| Papelera | `GET /trash`, `DELETE /trash` |
-| Medios | `GET /entries/{id}/thumbnail`, `GET /entries/{id}/preview`, `GET /jobs/{id}` |
+| Papelera  | `GET /trash`, `DELETE /trash`                                                     |
+| Medios    | `GET /entries/{id}/thumbnail`, `GET /entries/{id}/preview`, `GET /jobs/{id}`      |
 
 La especificación OpenAPI concreta y validada se genera desde FastAPI a medida
 que se implementan los casos de uso. Swagger UI y ReDoc consumen ese documento;
@@ -84,12 +84,23 @@ nombre lógico se utiliza como ruta física.
 ## Contenido y Range
 
 `GET /storage/files/{id}/content` autoriza, verifica el objeto y lo transmite
-actualmente mediante FastAPI. Soporta rangos únicos/múltiples, ETag,
-Last-Modified y precondiciones. `HEAD` devuelve los mismos metadatos sin body.
+actualmente mediante FastAPI. Soporta rangos únicos y múltiples de RFC 9110,
+ETag, Last-Modified y precondiciones. `HEAD` comparte autorización y cabeceras
+sin body.
 
-La estrategia de entrega puede devolver en el futuro `X-Accel-Redirect` hacia
-una ubicación Nginx `internal`, sin cambiar el caso de uso. El nombre se envía
-como `attachment` UTF-8 y el cliente nunca recibe una ruta del host.
+Por defecto el nombre se envía como `Content-Disposition: attachment` UTF-8.
+El parámetro opcional `disposition=inline` conserva el mismo recurso y permite
+un visor del navegador, pero solo cuando el MIME está en la lista segura del
+servidor: `application/pdf`, imágenes raster admitidas, y audio/vídeo HTML5
+admitidos. Un tipo activo o desconocido (por ejemplo HTML o SVG) sigue siendo
+`attachment`, incluso si el cliente solicita `inline`. El frontend consulta
+primero `HEAD` y no usa la extensión como autorización.
+
+Las respuestas de contenido usan caché privada, `Accept-Ranges`,
+`X-Content-Type-Options: nosniff` y no exponen rutas del host. La estrategia de
+entrega puede devolver en el futuro
+`X-Accel-Redirect` hacia una ubicación Nginx `internal`, sin cambiar el caso
+de uso ni el contrato de disposición.
 
 ## Conflictos y asincronía
 

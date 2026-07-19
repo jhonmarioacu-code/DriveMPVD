@@ -56,18 +56,34 @@ hacia una ubicación Nginx `internal`.
 
 Los nombres solo se usan en `Content-Disposition` UTF-8. El cache es privado y
 el ETag combina checksum, versión y modificación. Se admiten rangos únicos,
-sufijos y respuestas multipart, permitiendo audio, video y PDF incrementales.
+sufijos y respuestas multipart, permitiendo audio, vídeo y PDF incrementales.
+La disposición predeterminada es `attachment`; `?disposition=inline` solo se
+honra para una lista de MIME seguros de imagen raster, audio, vídeo y PDF. La
+cabecera `X-Content-Type-Options: nosniff` acompaña la entrega. De este modo un
+tipo activo como HTML o SVG no se incrusta en el origen de la aplicación aunque
+la URL lo solicite.
 
-## Miniaturas
+El frontend consulta `HEAD` antes de abrir una vista y usa el mismo `GET` para
+los elementos nativos del navegador. Por tanto el streaming no duplica bytes
+en la SPA y mantiene las cookies de sesión, ETag y Range del contrato existente.
 
-Las miniaturas son derivados cacheables y regenerables:
+## Miniaturas y derivados
 
-- imágenes: orientación EXIF aplicada, perfil seguro y límites de píxeles;
-- videos: fotograma mediante FFmpeg con timeout;
-- PDFs: primera página mediante renderizador con límites.
+El layout, modelos y puertos reservan derivados cacheables y regenerables, pero
+no hay todavía un endpoint de miniaturas ni worker de medios operativo. En
+particular, esta versión no ejecuta FFmpeg, un renderizador PDF ni una tarea que
+devuelva o agende `GET /entries/{id}/thumbnail`.
 
-La solicitud devuelve el derivado si existe o agenda un job idempotente. El
-explorador muestra un placeholder mientras se procesa.
+La Fase 7 aplica mientras tanto una estrategia de cliente acotada: las imágenes
+raster de hasta 1 MiB se cargan perezosamente como fuente `inline`; vídeos,
+PDF, imágenes grandes, tamaños desconocidos y fallos usan placeholders. No se
+descarga un objeto grande para crear una miniatura local.
+
+Cuando se implemente el servicio de derivados, deberá generar imágenes con
+orientación EXIF aplicada, perfil seguro y límite de píxeles; fotogramas de
+vídeo con FFmpeg aislado y timeout; y primera página de PDF con un renderizador
+con límites. La solicitud podrá devolver un derivado existente o un job
+idempotente, manteniendo el placeholder durante el procesamiento.
 
 ## Backup
 

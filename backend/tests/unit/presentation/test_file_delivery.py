@@ -18,6 +18,7 @@ from app.presentation.file_delivery import (
     content_disposition,
     evaluate_preconditions,
     file_etag,
+    is_inline_media_type,
     multipart_boundary,
     multipart_length,
     parse_ranges,
@@ -160,6 +161,17 @@ def test_headers_encode_utf8_filename_and_private_cache() -> None:
     assert headers["Accept-Ranges"] == "bytes"
     assert headers["Cache-Control"].startswith("private")
     assert headers["Last-Modified"].endswith("GMT")
+    assert headers["X-Content-Type-Options"] == "nosniff"
+
+
+def test_inline_disposition_is_restricted_to_safe_media_types() -> None:
+    inline = content_disposition("foto ñ.png", disposition="inline")
+
+    assert inline.startswith("inline;")
+    assert is_inline_media_type("image/png")
+    assert is_inline_media_type("APPLICATION/PDF")
+    assert not is_inline_media_type("image/svg+xml")
+    assert not is_inline_media_type("text/html")
 
 
 async def test_multipart_stream_length_and_metrics_are_exact() -> None:

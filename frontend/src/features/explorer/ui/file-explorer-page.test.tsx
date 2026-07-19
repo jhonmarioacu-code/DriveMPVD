@@ -35,6 +35,34 @@ vi.mock("@/features/uploads", () => ({
   useUploads: () => uploadsMock,
 }));
 
+vi.mock("@/features/viewers", () => ({
+  EntryThumbnail: () => <span aria-hidden="true" />,
+  FileViewerDialog: ({
+    file,
+    onClose,
+    onDownload,
+    onOpenInNewTab,
+  }: {
+    file: { name: string };
+    onClose: () => void;
+    onDownload: () => void;
+    onOpenInNewTab: () => void;
+  }) => (
+    <section aria-label={`Vista previa: ${file.name}`} role="dialog">
+      <button onClick={onClose} type="button">
+        Cerrar vista previa
+      </button>
+      <button onClick={onDownload} type="button">
+        Descargar desde vista previa
+      </button>
+      <button onClick={onOpenInNewTab} type="button">
+        Abrir aparte desde vista previa
+      </button>
+    </section>
+  ),
+  isPreviewable: (file: { extension: string | null }) => file.extension !== "bin",
+}));
+
 const root = entry("root", "folder", "Drive", null);
 const photos = entry("photos", "folder", "Fotos", root.id);
 const report = entry("report", "file", "reporte.pdf", root.id, 1536, "pdf");
@@ -214,6 +242,26 @@ describe("FileExplorerPage", () => {
     );
     await user.click(within(dialog).getByRole("button", { name: "Descargar" }));
     expect(click).toHaveBeenCalledOnce();
+  });
+
+  it("abre una vista previa compatible desde la barra y los detalles", async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await screen.findByText("reporte.pdf");
+
+    await user.click(screen.getByLabelText("Seleccionar reporte.pdf"));
+    await user.click(screen.getByRole("button", { name: "Vista previa" }));
+    expect(
+      await screen.findByRole("dialog", { name: "Vista previa: reporte.pdf" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Cerrar vista previa" }));
+
+    await user.click(screen.getByRole("button", { name: /^reporte\.pdf/ }));
+    const details = await screen.findByRole("dialog", { name: "reporte.pdf" });
+    await user.click(within(details).getByRole("button", { name: "Vista previa" }));
+    expect(
+      await screen.findByRole("dialog", { name: "Vista previa: reporte.pdf" }),
+    ).toBeVisible();
   });
 
   it("añade una selección múltiple a la cola de la carpeta abierta", async () => {
