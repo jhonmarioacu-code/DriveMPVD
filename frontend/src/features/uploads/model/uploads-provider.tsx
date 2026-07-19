@@ -20,6 +20,7 @@ import {
   UploadsContext,
   type UploadsContextValue,
 } from "@/features/uploads/model/uploads-context";
+import { createProgressReporter } from "@/features/uploads/model/progress-reporter";
 import { ApiClientError } from "@/shared/api/client";
 
 import type { UploadTask } from "@/features/uploads/model/types";
@@ -85,6 +86,11 @@ export function UploadsProvider({ children }: PropsWithChildren) {
       if (initialTask?.state !== "pending") return;
 
       const controller = new AbortController();
+      const progressReporter = createProgressReporter((uploadedBytes) => {
+        updateTask(taskId, {
+          uploadedBytes: Math.min(uploadedBytes, initialTask.file.size),
+        });
+      });
       controllers.current.set(taskId, controller);
       updateTask(taskId, { state: "uploading", error: null });
 
@@ -134,11 +140,12 @@ export function UploadsProvider({ children }: PropsWithChildren) {
               chunk,
               controller.signal,
               (uploadedBytes) => {
-                updateTask(taskId, {
-                  uploadedBytes: Math.min(uploadedBytes, task.file.size),
-                });
+                progressReporter.report(uploadedBytes);
               },
             );
+            // Flush any coalesced browser event before applying the authoritative
+            // server offset, so a delayed event cannot move the UI backwards.
+            progressReporter.flush();
             offset = result.offset;
             const updatedTask = updateTask(taskId, { uploadedBytes: offset });
             if (updatedTask === null) return;
@@ -173,6 +180,7 @@ export function UploadsProvider({ children }: PropsWithChildren) {
         if (controller.signal.aborted || currentTask?.state === "cancelled") return;
         updateTask(taskId, { state: "error", error: uploadErrorMessage(error) });
       } finally {
+        progressReporter.cancel();
         controllers.current.delete(taskId);
       }
     },

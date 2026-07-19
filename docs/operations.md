@@ -63,6 +63,12 @@ sin `Secure`.
 coherentes. El valor inicial es 50 GiB. Los nombres de cookies y el prefijo API
 no deben cambiar sin actualizar a la vez el build del frontend.
 
+`DRIVEMPVD_STORAGE_STREAM_BLOCK_SIZE_BYTES` y
+`DRIVEMPVD_STORAGE_WRITE_BUFFER_SIZE_BYTES` empiezan en 1 MiB. El segundo no
+necesita coincidir con el chunk HTTP: coalesce fragmentos pequeños sin retener
+el archivo completo. Sólo debe ajustarse tras medir el mismo volumen de
+almacenamiento con el benchmark de Fase 9.
+
 ## Instalación inicial
 
 ```bash
@@ -106,6 +112,37 @@ en la composición normal ni puede solicitarse desde Internet. El overlay
 `docker/compose.accel.yaml` sólo prepara un montaje de lectura para el futuro
 adaptador `X-Accel-Redirect`; la entrega actual permanece deliberadamente en
 FastAPI.
+
+## Benchmark de transferencias grandes
+
+Primero valide el adaptador local sin exponer datos ni tocar el catálogo. El
+fixture se borra al terminar; una prueba de 50 GiB exige confirmación explícita
+y espacio para el archivo más una reserva:
+
+```bash
+python backend/scripts/benchmark_storage.py --size-mib 256
+python backend/scripts/benchmark_storage.py \
+  --directory /data/bench --size-gib 50 --allow-large
+```
+
+Para el trayecto real, genere o coloque un payload en un volumen con capacidad
+suficiente. Si fuente y almacenamiento comparten disco, reserve al menos 115
+GiB para una prueba de 50 GiB. Después del bootstrap y con el stack activo:
+
+```bash
+export DRIVEMPVD_BENCHMARK_USERNAME=admin
+export DRIVEMPVD_BENCHMARK_PASSWORD='contraseña-creada'
+python3 backend/scripts/benchmark_deployment.py \
+  --file /data/bench/phase9-50g.bin \
+  --base-url https://drive.example.com
+```
+
+El script limpia el archivo remoto mediante papelera y borrado permanente por
+defecto; use `--keep-entry` sólo si necesita inspeccionarlo. Ejecute primero un
+cliente y luego varios procesos contra payloads distintos, y guarde el JSON de
+cada ejecución junto con CPU, RSS, I/O de disco, `docker stats` y planes
+`EXPLAIN (ANALYZE, BUFFERS)`. No active `X-Accel-Redirect` hasta comparar ambos
+modos manteniendo autorización, ETag, `HEAD` y Range.
 
 ## Validación y mantenimiento
 

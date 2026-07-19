@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
@@ -76,6 +77,56 @@ async def test_local_provider_rolls_back_failed_append_and_confines_keys(
 
     await provider.truncate_upload(upload_id, offset=0)
     await provider.discard_upload(upload_id)
+
+
+async def test_local_provider_coalesces_small_writes_and_handles_partial_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = LocalFileStorageProvider(
+        tmp_path,
+        stream_block_size=4,
+        write_buffer_size=4,
+    )
+    upload_id = uuid4()
+    await provider.create_upload(upload_id)
+
+    writes = 0
+    original_write_all = LocalFileStorageProvider._write_all
+
+    def count_write(handle: object, payload: bytes) -> None:
+        nonlocal writes
+        writes += 1
+        original_write_all(handle, payload)
+
+    monkeypatch.setattr(
+        LocalFileStorageProvider,
+        "_write_all",
+        staticmethod(count_write),
+    )
+
+    assert (
+        await provider.append_chunk(
+            upload_id,
+            offset=0,
+            chunks=_chunks(b"a", b"b", b"c", b"d", b"e", b"f", b"g", b"h", b"i"),
+        )
+        == 9
+    )
+    assert writes == 3
+
+    class PartialWriter:
+        def __init__(self) -> None:
+            self.buffer = BytesIO()
+
+        def write(self, value: bytes) -> int:
+            portion = value[:2]
+            self.buffer.write(portion)
+            return len(portion)
+
+    partial_writer = PartialWriter()
+    LocalFileStorageProvider._write_all(partial_writer, b"abcdef")
+    assert partial_writer.buffer.getvalue() == b"abcdef"
     await provider.discard_upload(upload_id)
 
 

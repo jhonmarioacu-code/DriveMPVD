@@ -1,6 +1,6 @@
 # Fase 8: Docker Compose y Nginx
 
-- Estado: implementación terminada; validación runtime pendiente de un host Docker
+- Estado: cerrada por implementación; validación runtime pendiente de un host Docker
 - Fecha: 2026-07-19
 
 ## Objetivo

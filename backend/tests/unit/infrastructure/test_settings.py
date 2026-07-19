@@ -41,6 +41,15 @@ def test_settings_reject_default_page_larger_than_maximum() -> None:
         Settings(default_page_size=100, max_page_size=50)
 
 
+def test_settings_allows_a_write_buffer_larger_than_a_network_chunk() -> None:
+    settings = Settings(
+        storage_root=Path.cwd().anchor,
+        max_upload_chunk_size_bytes=64 * 1024,
+    )
+
+    assert settings.storage_write_buffer_size_bytes == 1024 * 1024
+
+
 def test_production_rejects_default_duplicate_or_short_auth_secrets() -> None:
     with pytest.raises(ValidationError):
         Settings(

@@ -109,3 +109,22 @@ docker compose --env-file docker/.env down
 
 `down` conserva `postgres_data` y el directorio de objetos. Nunca use
 `down --volumes` ni borre `/data/storage` sin un backup verificado.
+
+## Benchmark de Fase 9
+
+Con el stack operativo y un administrador creado, el checkout incluye un
+cliente autenticado para medir chunks, descarga, checksum y Range sin cargar el
+archivo entero en memoria:
+
+```bash
+export DRIVEMPVD_BENCHMARK_USERNAME=admin
+export DRIVEMPVD_BENCHMARK_PASSWORD='contraseña-creada'
+python3 backend/scripts/benchmark_deployment.py \
+  --file /data/bench/phase9-50g.bin \
+  --base-url https://drive.example.com
+```
+
+Use primero `backend/scripts/benchmark_storage.py --size-mib 256` sobre el
+volumen objetivo. Su modo de 50 GiB requiere `--allow-large`; consulte
+[`docs/operations.md`](../docs/operations.md) para la reserva de disco, la
+concurrencia y la comparación previa a activar `X-Accel-Redirect`.

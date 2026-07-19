@@ -10,7 +10,8 @@ La arquitectura, el backend hasta el incremento 2.7, la base del frontend, la
 autenticación web, el explorador, las subidas reanudables y la visualización de
 archivos están terminados. La infraestructura de contenedores y Nginx está
 implementada; falta ejecutarla una vez en un host con Docker Compose para cerrar
-su validación operativa.
+su validación operativa. La optimización de transferencias ya incluye medición
+local y arneses de 50 GiB, pendientes de repetir en el host objetivo.
 
 | Fase | Alcance                                           | Estado                          |
 | ---- | ------------------------------------------------- | ------------------------------- |
@@ -21,8 +22,8 @@ su validación operativa.
 | 5    | Explorador de archivos                            | Terminada                       |
 | 6    | Subidas normales y reanudables                    | Terminada                       |
 | 7    | Visualizadores, miniaturas, streaming y descargas | Terminada                       |
-| 8    | Docker Compose y Nginx                            | Implementada; runtime pendiente |
-| 9    | Optimización y operación                          | Pendiente                       |
+| 8    | Docker Compose y Nginx                            | Cerrada; runtime pendiente      |
+| 9    | Optimización y operación                          | Implementada; host pendiente    |
 | 10   | Pruebas y cobertura final                         | Pendiente                       |
 
 ## Documentación de arquitectura

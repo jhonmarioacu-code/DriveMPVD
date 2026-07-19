@@ -4,6 +4,7 @@ import asyncio
 import os
 from collections.abc import AsyncIterator
 from pathlib import Path, PurePosixPath
+from typing import BinaryIO, cast
 from uuid import UUID
 
 from app.application.ports.file_storage import (
@@ -15,11 +16,24 @@ from app.infrastructure.exceptions import FileStorageError
 
 
 class LocalFileStorageProvider:
-    def __init__(self, root: Path, *, stream_block_size: int = 1024 * 1024) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        stream_block_size: int = 1024 * 1024,
+        write_buffer_size: int | None = None,
+    ) -> None:
+        if stream_block_size <= 0:
+            msg = "stream_block_size must be positive"
+            raise ValueError(msg)
+        if write_buffer_size is not None and write_buffer_size <= 0:
+            msg = "write_buffer_size must be positive"
+            raise ValueError(msg)
         self._root = root.resolve()
         self._staging = self._root / "staging"
         self._objects = self._root / "objects"
         self._block_size = stream_block_size
+        self._write_buffer_size = write_buffer_size or stream_block_size
 
     async def create_upload(self, upload_id: UUID) -> None:
         path = self._staging_path(upload_id)
@@ -45,9 +59,11 @@ class LocalFileStorageProvider:
             if actual_size != offset:
                 raise FileStorageError("The staging offset is inconsistent.")
             await asyncio.to_thread(handle.seek, offset)
-            async for chunk in chunks:
-                if chunk:
-                    await asyncio.to_thread(handle.write, chunk)
+            async for chunk in _coalesce_chunks(
+                chunks,
+                maximum_size=self._write_buffer_size,
+            ):
+                await asyncio.to_thread(self._write_all, handle, chunk)
             await asyncio.to_thread(os.fsync, handle.fileno())
             return await asyncio.to_thread(self._handle_size, handle)
         except FileStorageError:
@@ -206,6 +222,44 @@ class LocalFileStorageProvider:
         return os.fstat(handle.fileno()).st_size  # type: ignore[attr-defined]
 
     @staticmethod
+    def _write_all(handle: object, payload: bytes) -> None:
+        """Persist a bounded payload even if the filesystem writes partially."""
+        file_handle = cast(BinaryIO, handle)
+        view = memoryview(payload)
+        while view:
+            written = file_handle.write(view)
+            if written <= 0:
+                msg = "The staging write did not make progress."
+                raise OSError(msg)
+            view = view[written:]
+
+    @staticmethod
     def _truncate(handle: object, offset: int) -> None:
         handle.truncate(offset)  # type: ignore[attr-defined]
         os.fsync(handle.fileno())  # type: ignore[attr-defined]
+
+
+async def _coalesce_chunks(
+    chunks: AsyncIterator[bytes],
+    *,
+    maximum_size: int,
+) -> AsyncIterator[bytes]:
+    """Coalesce small ASGI fragments without retaining a complete upload."""
+    pending = bytearray()
+    async for chunk in chunks:
+        if not chunk:
+            continue
+        if not pending and len(chunk) >= maximum_size:
+            yield chunk
+            continue
+        position = 0
+        while position < len(chunk):
+            remaining_capacity = maximum_size - len(pending)
+            next_position = min(position + remaining_capacity, len(chunk))
+            pending.extend(chunk[position:next_position])
+            position = next_position
+            if len(pending) == maximum_size:
+                yield bytes(pending)
+                pending.clear()
+    if pending:
+        yield bytes(pending)

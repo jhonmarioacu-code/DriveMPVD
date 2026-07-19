@@ -133,7 +133,11 @@ class ApplicationContainer:
             secrets=secrets,
             clock=clock,
         )
-        file_storage = LocalFileStorageProvider(settings.storage_root)
+        file_storage = LocalFileStorageProvider(
+            settings.storage_root,
+            stream_block_size=settings.storage_stream_block_size_bytes,
+            write_buffer_size=settings.storage_write_buffer_size_bytes,
+        )
         upload_policy = UploadPolicyDTO(
             maximum_file_size=settings.max_upload_size_bytes,
             maximum_chunk_size=settings.max_upload_chunk_size_bytes,

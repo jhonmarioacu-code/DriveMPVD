@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     database_statement_timeout_ms: int = Field(default=30_000, ge=1_000, le=300_000)
     database_echo: bool = False
     storage_root: Path = Path("/data/storage")
+    storage_stream_block_size_bytes: int = Field(
+        default=1024 * 1024,
+        ge=64 * 1024,
+        le=16 * 1024 * 1024,
+    )
+    storage_write_buffer_size_bytes: int = Field(
+        default=1024 * 1024,
+        ge=64 * 1024,
+        le=16 * 1024 * 1024,
+    )
     max_upload_size_bytes: int = Field(
         default=50 * 1024 * 1024 * 1024,
         gt=0,
