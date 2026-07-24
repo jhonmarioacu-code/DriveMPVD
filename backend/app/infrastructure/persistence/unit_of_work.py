@@ -5,6 +5,7 @@ from types import TracebackType
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.application.ports.activity_repository import ActivityRepository
 from app.application.ports.auth_repositories import (
     AdminAccountRepository,
     AuthSessionRepository,
@@ -14,6 +15,9 @@ from app.application.ports.identifiers import IdGenerator
 from app.application.ports.outbox_repository import OutboxRepository
 from app.application.ports.storage_repository import StorageRepository
 from app.infrastructure.exceptions import PersistenceError, UnitOfWorkStateError
+from app.infrastructure.persistence.repositories.activity import (
+    SQLAlchemyActivityRepository,
+)
 from app.infrastructure.persistence.repositories.auth import (
     SQLAlchemyAdminAccountRepository,
     SQLAlchemyAuthSessionRepository,
@@ -42,6 +46,7 @@ class SQLAlchemyUnitOfWork:
         self._admin_accounts: SQLAlchemyAdminAccountRepository | None = None
         self._auth_sessions: SQLAlchemyAuthSessionRepository | None = None
         self._security_events: SQLAlchemySecurityEventRepository | None = None
+        self._activity: SQLAlchemyActivityRepository | None = None
         self._storage: SQLAlchemyStorageRepository | None = None
         self._completed = False
 
@@ -71,6 +76,12 @@ class SQLAlchemyUnitOfWork:
         return self._security_events
 
     @property
+    def activity(self) -> ActivityRepository:
+        if self._activity is None or self._completed:
+            raise UnitOfWorkStateError()
+        return self._activity
+
+    @property
     def storage(self) -> StorageRepository:
         if self._storage is None or self._completed:
             raise UnitOfWorkStateError()
@@ -94,6 +105,7 @@ class SQLAlchemyUnitOfWork:
         self._admin_accounts = SQLAlchemyAdminAccountRepository(self._session)
         self._auth_sessions = SQLAlchemyAuthSessionRepository(self._session)
         self._security_events = SQLAlchemySecurityEventRepository(self._session)
+        self._activity = SQLAlchemyActivityRepository(self._session)
         self._storage = SQLAlchemyStorageRepository(self._session)
         return self
 
@@ -116,6 +128,7 @@ class SQLAlchemyUnitOfWork:
             self._admin_accounts = None
             self._auth_sessions = None
             self._security_events = None
+            self._activity = None
             self._storage = None
             self._completed = True
 

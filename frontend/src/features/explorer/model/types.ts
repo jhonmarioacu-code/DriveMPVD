@@ -14,6 +14,7 @@ export interface StorageEntry {
   current_version_number: number | null;
   created_at: string;
   updated_at: string;
+  is_favorite?: boolean;
 }
 
 export interface FolderBreadcrumb {

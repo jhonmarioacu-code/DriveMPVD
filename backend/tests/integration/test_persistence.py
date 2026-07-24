@@ -1,7 +1,10 @@
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 from app.application.dtos.common import PageRequestDTO
@@ -13,6 +16,13 @@ from app.infrastructure.persistence.health import SQLAlchemyDatabaseHealthProvid
 from app.infrastructure.persistence.identifiers import Uuid7Generator
 
 pytestmark = pytest.mark.postgresql
+
+
+def _expected_migration_head() -> str:
+    alembic_config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    head = ScriptDirectory.from_config(alembic_config).get_current_head()
+    assert head is not None
+    return head
 
 
 class StaticIdGenerator(IdGenerator):
@@ -67,7 +77,7 @@ async def test_migration_targets_postgresql_16_and_creates_documented_indexes(
         )
 
     assert str(version).startswith("16.")
-    assert revision == "20260718_0003"
+    assert revision == _expected_migration_head()
     assert set(indexes) == {
         "pk_outbox_events",
         "ix_outbox_events_pending_created_id",
@@ -180,6 +190,81 @@ async def test_repository_soft_delete_is_idempotent_and_hidden_from_reads(
             page=PageRequestDTO(limit=10),
         )
         assert page.items == ()
+
+
+async def test_outbox_acknowledges_and_records_retryable_failures_atomically(
+    database: Database,
+    clean_outbox: None,
+) -> None:
+    del clean_outbox
+    factory = _factory(database)
+    async with factory() as unit_of_work:
+        persisted = await unit_of_work.outbox.add(_message())
+        await unit_of_work.commit()
+
+    attempted_at = datetime.now(UTC)
+    async with factory() as unit_of_work:
+        assert await unit_of_work.outbox.record_failure(
+            persisted.id,
+            attempted_at=attempted_at,
+            error_kind="FileStorageError",
+        )
+        await unit_of_work.commit()
+
+    async with factory() as unit_of_work:
+        failed = await unit_of_work.outbox.get(persisted.id)
+        assert failed is not None
+        assert failed.attempts == 1
+        assert failed.last_error == "FileStorageError"
+        assert failed.processed_at is None
+        assert await unit_of_work.outbox.mark_processed(
+            persisted.id,
+            processed_at=attempted_at,
+        )
+        assert not await unit_of_work.outbox.mark_processed(
+            persisted.id,
+            processed_at=attempted_at,
+        )
+        await unit_of_work.commit()
+
+    async with factory() as unit_of_work:
+        completed = await unit_of_work.outbox.get(persisted.id)
+        assert completed is not None
+        assert completed.attempts == 2
+        assert completed.last_error is None
+        assert completed.processed_at is not None
+        assert not await unit_of_work.outbox.record_failure(
+            persisted.id,
+            attempted_at=attempted_at,
+            error_kind="must-not-reopen",
+        )
+
+
+async def test_outbox_lease_skips_an_event_locked_by_another_worker(
+    database: Database,
+    clean_outbox: None,
+) -> None:
+    del clean_outbox
+    factory = _factory(database)
+    async with factory() as unit_of_work:
+        persisted = await unit_of_work.outbox.add(_message())
+        await unit_of_work.commit()
+
+    async with factory() as owner:
+        leased = await owner.outbox.get_pending_for_update(
+            persisted.id,
+            skip_locked=True,
+        )
+        assert leased is not None
+        async with factory() as contender:
+            assert (
+                await contender.outbox.get_pending_for_update(
+                    persisted.id,
+                    skip_locked=True,
+                )
+                is None
+            )
+        await owner.rollback()
 
 
 async def test_database_rejects_non_uuid7_primary_keys(

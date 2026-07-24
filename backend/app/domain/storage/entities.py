@@ -182,6 +182,22 @@ class UploadSession:
         self.status = UploadStatus.COMPLETED
         self.updated_at = now
 
+    def cancel(self, *, now: datetime) -> None:
+        if self.status is UploadStatus.COMPLETED:
+            raise InvalidStateTransitionError("A completed upload cannot be cancelled.")
+        if self.status is UploadStatus.CANCELLED:
+            return
+        self.status = UploadStatus.CANCELLED
+        self.updated_at = now
+
+    def expire(self, *, now: datetime) -> None:
+        if self.status not in {UploadStatus.CREATED, UploadStatus.UPLOADING}:
+            raise InvalidStateTransitionError("Only an active upload can expire.")
+        if self.expires_at > now:
+            raise InvalidStateTransitionError("The upload session has not expired.")
+        self.status = UploadStatus.EXPIRED
+        self.updated_at = now
+
 
 @dataclass(frozen=True, slots=True)
 class TrashItem:

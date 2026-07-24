@@ -632,6 +632,7 @@ def _entry_data(value: StorageEntryDTO) -> StorageEntryData:
         current_version_number=value.current_version_number,
         created_at=value.created_at,
         updated_at=value.updated_at,
+        is_favorite=value.is_favorite,
     )
 
 

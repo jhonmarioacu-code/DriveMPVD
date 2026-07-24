@@ -216,6 +216,10 @@ async def test_storage_routes_require_auth_and_publish_openapi_contract(
     schema = (await context.client.get("/openapi.json")).json()
     paths = schema["paths"]
     expected = {
+        "/api/v1/activity/favorites",
+        "/api/v1/activity/favorites/{entry_id}",
+        "/api/v1/activity/recents",
+        "/api/v1/activity/recents/{entry_id}",
         "/api/v1/storage/navigation",
         "/api/v1/storage/folders/{folder_id}/entries",
         "/api/v1/storage/files/{file_id}",
@@ -266,6 +270,7 @@ async def test_navigation_resolves_provisioned_root_and_folder_breadcrumbs(
             "current_version_number": None,
             "created_at": root.json()["data"]["folder"]["created_at"],
             "updated_at": root.json()["data"]["folder"]["updated_at"],
+            "is_favorite": False,
         },
         "breadcrumbs": [{"id": str(context.root_id), "name": "Drive"}],
     }
@@ -289,6 +294,107 @@ async def test_navigation_resolves_provisioned_root_and_folder_breadcrumbs(
         params={"folder_id": str(context.file_id)},
     )
     assert missing.status_code == 404
+
+
+async def test_activity_endpoints_are_private_idempotent_and_hide_trashed_entries(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    favorite_path = f"/api/v1/activity/favorites/{context.file_id}"
+    recent_path = f"/api/v1/activity/recents/{context.file_id}"
+
+    unauthorized = await context.client.get("/api/v1/activity/favorites")
+    assert unauthorized.status_code == 401
+
+    for _ in range(2):
+        favorite = await context.client.put(favorite_path, headers=context.headers)
+        assert favorite.status_code == 200
+        assert favorite.json()["data"] == {
+            "entry_id": str(context.file_id),
+            "is_favorite": True,
+        }
+
+    favorites = await context.client.get(
+        "/api/v1/activity/favorites",
+        headers=context.headers,
+    )
+    assert favorites.status_code == 200
+    assert [item["entry"]["id"] for item in favorites.json()["data"]["items"]] == [
+        str(context.file_id)
+    ]
+    assert favorites.json()["data"]["items"][0]["entry"]["is_favorite"] is True
+
+    entries = await context.client.get(
+        f"/api/v1/storage/folders/{context.root_id}/entries",
+        headers=context.headers,
+    )
+    report = next(
+        item
+        for item in entries.json()["data"]["items"]
+        if item["id"] == str(context.file_id)
+    )
+    assert report["is_favorite"] is True
+
+    for _ in range(2):
+        recent = await context.client.post(recent_path, headers=context.headers)
+        assert recent.status_code == 200
+        assert recent.json()["data"] == {"entry_id": str(context.file_id)}
+
+    recents = await context.client.get(
+        "/api/v1/activity/recents",
+        headers=context.headers,
+    )
+    assert [item["entry"]["id"] for item in recents.json()["data"]["items"]] == [
+        str(context.file_id)
+    ]
+
+    renamed = await context.client.patch(
+        f"/api/v1/storage/entries/{context.file_id}",
+        headers=context.headers,
+        json={"name": "updated-report.pdf"},
+    )
+    assert renamed.status_code == 200
+    renamed_favorite = await context.client.get(
+        "/api/v1/activity/favorites",
+        headers=context.headers,
+    )
+    assert (
+        renamed_favorite.json()["data"]["items"][0]["entry"]["name"]
+        == "updated-report.pdf"
+    )
+
+    trashed = await context.client.post(
+        f"/api/v1/storage/entries/{context.file_id}/trash",
+        headers=context.headers,
+    )
+    assert trashed.status_code == 200
+    assert (
+        await context.client.get("/api/v1/activity/favorites", headers=context.headers)
+    ).json()["data"]["items"] == []
+    assert (
+        await context.client.get("/api/v1/activity/recents", headers=context.headers)
+    ).json()["data"]["items"] == []
+
+
+async def test_activity_mutations_require_csrf_for_cookie_authenticated_requests(
+    storage_api_context: StorageApiContext,
+) -> None:
+    context = storage_api_context
+    login = await context.client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "Admin",
+            "password": "correct horse battery staple",
+            "delivery": "cookie",
+        },
+    )
+    assert login.status_code == 200
+    path = f"/api/v1/activity/favorites/{context.file_id}"
+    rejected = await context.client.put(path)
+    assert rejected.status_code == 403
+    csrf = context.client.cookies["drivempvd_csrf"]
+    accepted = await context.client.put(path, headers={"X-CSRF-Token": csrf})
+    assert accepted.status_code == 200
 
 
 async def test_list_endpoint_paginates_sorts_filters_and_revalidates_cache(

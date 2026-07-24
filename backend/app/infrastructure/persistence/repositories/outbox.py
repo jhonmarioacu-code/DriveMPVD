@@ -60,6 +60,28 @@ class SQLAlchemyOutboxRepository:
             raise PersistenceError() from exc
         return None if model is None else self._to_dto(model)
 
+    async def get_pending_for_update(
+        self,
+        message_id: UUID,
+        *,
+        skip_locked: bool,
+    ) -> OutboxMessageDTO | None:
+        """Lease one active pending message without blocking another worker."""
+        statement = (
+            select(OutboxEventModel)
+            .where(
+                OutboxEventModel.id == message_id,
+                OutboxEventModel.deleted_at.is_(None),
+                OutboxEventModel.processed_at.is_(None),
+            )
+            .with_for_update(skip_locked=skip_locked)
+        )
+        try:
+            model = await self._session.scalar(statement)
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return None if model is None else self._to_dto(model)
+
     async def list(
         self,
         *,
@@ -107,6 +129,55 @@ class SQLAlchemyOutboxRepository:
                 OutboxEventModel.deleted_at.is_(None),
             )
             .values(deleted_at=deleted_at, updated_at=deleted_at)
+        )
+        try:
+            result = cast(CursorResult[Any], await self._session.execute(statement))
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return bool(result.rowcount)
+
+    async def mark_processed(self, message_id: UUID, *, processed_at: datetime) -> bool:
+        """Acknowledge one pending event and retain its delivery count."""
+        statement = (
+            update(OutboxEventModel)
+            .where(
+                OutboxEventModel.id == message_id,
+                OutboxEventModel.deleted_at.is_(None),
+                OutboxEventModel.processed_at.is_(None),
+            )
+            .values(
+                processed_at=processed_at,
+                attempts=OutboxEventModel.attempts + 1,
+                last_error=None,
+                updated_at=processed_at,
+            )
+        )
+        try:
+            result = cast(CursorResult[Any], await self._session.execute(statement))
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return bool(result.rowcount)
+
+    async def record_failure(
+        self,
+        message_id: UUID,
+        *,
+        attempted_at: datetime,
+        error_kind: str,
+    ) -> bool:
+        """Persist only a bounded exception category, never raw exception data."""
+        statement = (
+            update(OutboxEventModel)
+            .where(
+                OutboxEventModel.id == message_id,
+                OutboxEventModel.deleted_at.is_(None),
+                OutboxEventModel.processed_at.is_(None),
+            )
+            .values(
+                attempts=OutboxEventModel.attempts + 1,
+                last_error=error_kind[:120],
+                updated_at=attempted_at,
+            )
         )
         try:
             result = cast(CursorResult[Any], await self._session.execute(statement))

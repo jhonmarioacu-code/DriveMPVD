@@ -13,6 +13,11 @@ import {
   renameEntry,
   trashEntry,
 } from "@/features/explorer/api/explorer-api";
+import {
+  recordRecentOpen,
+  removeFavorite,
+  setFavorite,
+} from "@/features/activity/api/activity-api";
 import { FileExplorerPage } from "@/features/explorer/ui/file-explorer-page";
 import { ApiClientError } from "@/shared/api/client";
 
@@ -29,11 +34,24 @@ vi.mock("@/features/explorer/api/explorer-api", () => ({
   fileContentUrl: vi.fn((fileId: string) => `/content/${fileId}`),
 }));
 
+vi.mock("@/features/activity/api/activity-api", () => ({
+  listActivity: vi.fn(),
+  setFavorite: vi.fn(),
+  removeFavorite: vi.fn(),
+  recordRecentOpen: vi.fn(),
+}));
+
 const uploadsMock = vi.hoisted(() => ({ enqueueFiles: vi.fn() }));
 
-vi.mock("@/features/uploads", () => ({
-  useUploads: () => uploadsMock,
-}));
+vi.mock("@/features/uploads/model/uploads-context", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@/features/uploads/model/uploads-context")
+  >();
+  return {
+    ...actual,
+    useUploadsDispatch: () => uploadsMock,
+  };
+});
 
 vi.mock("@/features/viewers", () => ({
   EntryThumbnail: () => <span aria-hidden="true" />,
@@ -153,6 +171,17 @@ describe("FileExplorerPage", () => {
     vi.mocked(renameEntry).mockResolvedValue(report);
     vi.mocked(moveEntry).mockResolvedValue(report);
     vi.mocked(trashEntry).mockResolvedValue({ id: report.id });
+    vi.mocked(setFavorite).mockReset().mockResolvedValue({
+      entry_id: report.id,
+      is_favorite: true,
+    });
+    vi.mocked(removeFavorite).mockReset().mockResolvedValue({
+      entry_id: report.id,
+      is_favorite: false,
+    });
+    vi.mocked(recordRecentOpen).mockReset().mockResolvedValue({
+      entry_id: report.id,
+    });
     uploadsMock.enqueueFiles.mockReset();
   });
 
@@ -166,6 +195,9 @@ describe("FileExplorerPage", () => {
     expect(await screen.findByText("portada.jpg")).toBeVisible();
 
     await user.type(screen.getByLabelText("Filtrar esta carpeta"), "reporte");
+    expect(screen.getByLabelText("Filtrar esta carpeta")).toHaveClass(
+      "explorer-search-input",
+    );
     await waitFor(() =>
       expect(listFolderEntries).toHaveBeenCalledWith(
         root.id,
@@ -182,6 +214,52 @@ describe("FileExplorerPage", () => {
     expect(screen.getByText("Esta carpeta está vacía")).toBeVisible();
     await user.click(screen.getByRole("link", { name: "Drive" }));
     expect(await screen.findByRole("heading", { name: "Drive" })).toBeVisible();
+  });
+
+  it("actualiza favoritos y recientes desde las acciones del explorador", async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+
+    await screen.findByText("reporte.pdf");
+    await user.click(
+      screen.getByRole("button", { name: "Añadir reporte.pdf a favoritos" }),
+    );
+    await waitFor(() => expect(setFavorite).toHaveBeenCalledWith(report.id));
+
+    await user.click(screen.getByRole("button", { name: /^reporte\.pdf/ }));
+    await waitFor(() => expect(recordRecentOpen).toHaveBeenCalledWith(report.id));
+  });
+
+  it("mantiene las acciones de teclado de la fila separadas de sus controles", async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+
+    await screen.findByText("reporte.pdf");
+    const grid = screen.getByRole("grid", { name: "Archivos y carpetas" });
+    expect(within(grid).getByRole("columnheader", { name: "Nombre" })).toBeVisible();
+
+    const row = screen.getByRole("row", { name: /reporte\.pdf/ });
+    const selection = screen.getByLabelText("Seleccionar reporte.pdf");
+    row.focus();
+    await user.keyboard(" ");
+    expect(selection).toBeChecked();
+
+    await user.click(selection);
+    expect(selection).not.toBeChecked();
+
+    const favorite = screen.getByRole("button", {
+      name: "Añadir reporte.pdf a favoritos",
+    });
+    favorite.focus();
+    await user.keyboard(" ");
+    await waitFor(() => expect(setFavorite).toHaveBeenCalledWith(report.id));
+    expect(selection).not.toBeChecked();
+
+    const open = screen.getByRole("button", { name: "Abrir reporte.pdf" });
+    open.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(recordRecentOpen).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("dialog", { name: "reporte.pdf" })).toBeVisible();
   });
 
   it("crea, renombra, mueve y envía elementos a la papelera", async () => {
@@ -254,6 +332,7 @@ describe("FileExplorerPage", () => {
     expect(
       await screen.findByRole("dialog", { name: "Vista previa: reporte.pdf" }),
     ).toBeVisible();
+    await waitFor(() => expect(recordRecentOpen).toHaveBeenCalledWith(report.id));
     await user.click(screen.getByRole("button", { name: "Cerrar vista previa" }));
 
     await user.click(screen.getByRole("button", { name: /^reporte\.pdf/ }));

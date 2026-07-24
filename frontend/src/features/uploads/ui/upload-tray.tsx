@@ -112,22 +112,13 @@ function UploadTaskItem({ task }: { task: UploadTask }) {
       </div>
 
       <div className="mt-3">
-        <div
-          aria-hidden="true"
-          className="h-1.5 overflow-hidden rounded-full bg-border"
-        >
-          <div
-            className={cn(
-              "h-full rounded-full transition-[width] duration-200",
-              task.state === "error" ? "bg-danger" : "bg-brand",
-              task.state === "completed" && "bg-success",
-            )}
-            style={{ width: `${String(percentage)}%` }}
-          />
-        </div>
         <progress
           aria-label={`Progreso de subida de ${task.file.name}`}
-          className="sr-only"
+          className={cn(
+            "upload-progress",
+            task.state === "error" && "upload-progress-error",
+            task.state === "completed" && "upload-progress-completed",
+          )}
           max={task.file.size || 1}
           value={Math.min(task.uploadedBytes, task.file.size || 1)}
         >

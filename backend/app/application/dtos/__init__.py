@@ -1,5 +1,12 @@
 """Typed data transfer objects used by application boundaries."""
 
+from app.application.dtos.activity import (
+    ActivityCursorDTO,
+    ActivityEntryDTO,
+    FavoriteStatusDTO,
+    ListActivityQueryDTO,
+    RecordRecentOpenCommandDTO,
+)
 from app.application.dtos.auth import (
     AccessTokenClaimsDTO,
     AdminPrincipalDTO,
@@ -34,14 +41,18 @@ from app.application.dtos.system import HealthStatusDTO, ReadinessStatusDTO
 
 __all__ = [
     "AccessTokenClaimsDTO",
+    "ActivityCursorDTO",
+    "ActivityEntryDTO",
     "AdminPrincipalDTO",
     "AuthPolicyDTO",
     "AuthenticationResultDTO",
     "BootstrapAdminCommandDTO",
     "CopyEntryCommandDTO",
     "CreateFolderCommandDTO",
+    "FavoriteStatusDTO",
     "HealthStatusDTO",
     "IssuedTokenDTO",
+    "ListActivityQueryDTO",
     "LoginCommandDTO",
     "MoveEntryCommandDTO",
     "NewOutboxMessageDTO",
@@ -55,6 +66,7 @@ __all__ = [
     "PermanentlyDeleteCommandDTO",
     "RateLimitDecisionDTO",
     "ReadinessStatusDTO",
+    "RecordRecentOpenCommandDTO",
     "RefreshCommandDTO",
     "RefreshTokenClaimsDTO",
     "RenameEntryCommandDTO",

@@ -9,7 +9,7 @@ from app.application.dtos.storage import (
 from app.domain.storage.entities import File, Folder, StorageEntry, TrashItem
 
 
-def entry_to_dto(entry: StorageEntry) -> StorageEntryDTO:
+def entry_to_dto(entry: StorageEntry, *, is_favorite: bool = False) -> StorageEntryDTO:
     if isinstance(entry, File):
         return StorageEntryDTO(
             id=entry.id,
@@ -23,6 +23,7 @@ def entry_to_dto(entry: StorageEntry) -> StorageEntryDTO:
             current_version_number=entry.current_version_number,
             created_at=entry.created_at,
             updated_at=entry.updated_at,
+            is_favorite=is_favorite,
         )
     if not isinstance(entry, Folder):
         raise TypeError("Unsupported storage entry type.")
@@ -38,6 +39,7 @@ def entry_to_dto(entry: StorageEntry) -> StorageEntryDTO:
         current_version_number=None,
         created_at=entry.created_at,
         updated_at=entry.updated_at,
+        is_favorite=is_favorite,
     )
 
 

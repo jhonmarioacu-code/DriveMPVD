@@ -10,6 +10,7 @@ from app.infrastructure.container import ApplicationContainer
 from app.infrastructure.exceptions import InfrastructureError
 from app.infrastructure.logging import configure_logging
 from app.presentation.api.router import create_api_router
+from app.presentation.api.v1.activity import ActivityRouteUseCases
 from app.presentation.api.v1.auth import AuthRouteUseCases
 from app.presentation.api.v1.storage import StorageRouteUseCases
 from app.presentation.auth import AuthCookiePolicy
@@ -74,6 +75,13 @@ def create_application(
         logout=active_container.logout,
         revoke_all=active_container.revoke_all_sessions,
     )
+    activity_use_cases = ActivityRouteUseCases(
+        list_favorites=active_container.list_favorites,
+        list_recents=active_container.list_recents,
+        set_favorite=active_container.set_favorite,
+        remove_favorite=active_container.remove_favorite,
+        record_recent_open=active_container.record_recent_open,
+    )
     storage_use_cases = StorageRouteUseCases(
         get_navigation=active_container.get_folder_navigation,
         list_entries=active_container.list_folder_entries,
@@ -118,6 +126,7 @@ def create_application(
             active_container.get_health,
             active_container.get_readiness,
             auth_use_cases,
+            activity_use_cases,
             storage_use_cases,
             cookie_policy,
         ),

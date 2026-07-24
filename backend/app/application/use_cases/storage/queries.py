@@ -12,18 +12,25 @@ from app.application.dtos.common import PageDTO
 from app.application.dtos.storage import (
     FileDetailsDTO,
     ListFolderEntriesQueryDTO,
+    ListTrashQueryDTO,
     SortDirection,
     StorageEntryDTO,
     StorageListFiltersDTO,
     StoragePageCursorDTO,
     StorageSortField,
+    TrashCursorDTO,
+    TrashedEntryDTO,
 )
 from app.application.exceptions import (
     ApplicationValidationError,
     StorageEntryNotFoundError,
 )
 from app.application.ports.unit_of_work import UnitOfWorkFactory
-from app.application.use_cases.storage.mappers import entry_to_dto, file_to_details_dto
+from app.application.use_cases.storage.mappers import (
+    entry_to_dto,
+    file_to_details_dto,
+    trash_to_dto,
+)
 from app.domain.storage.entities import File
 from app.domain.storage.value_objects import EntryName
 
@@ -54,10 +61,49 @@ class ListFolderEntriesUseCase:
                 direction=query.direction,
                 cursor=cursor,
             )
-        items = tuple(entry_to_dto(entry) for entry in entries)
+            favorite_ids = await unit_of_work.activity.favorite_entry_ids(
+                owner_id=query.owner_id,
+                entry_ids=tuple(entry.id for entry in entries),
+            )
+        items = tuple(
+            entry_to_dto(entry, is_favorite=entry.id in favorite_ids)
+            for entry in entries
+        )
         next_cursor = None
         if has_more and items:
             next_cursor = _encode_cursor(items[-1], query.sort_by, query.direction)
+        return PageDTO(items=items, next_cursor=next_cursor)
+
+
+class ListTrashUseCase:
+    """Expose restorable tombstones without leaking another owner's entries."""
+
+    def __init__(self, unit_of_work_factory: UnitOfWorkFactory) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+
+    async def execute(
+        self,
+        query: ListTrashQueryDTO,
+    ) -> PageDTO[TrashedEntryDTO]:
+        if not 1 <= query.limit <= 200:
+            raise ApplicationValidationError("Page limit must be between 1 and 200.")
+        cursor = _decode_trash_cursor(query.cursor)
+        async with self._unit_of_work_factory() as unit_of_work:
+            records, has_more = await unit_of_work.storage.list_trash(
+                owner_id=query.owner_id,
+                limit=query.limit,
+                cursor=cursor,
+            )
+        items = tuple(
+            TrashedEntryDTO(
+                trash_item=trash_to_dto(record.trash_item),
+                entry=entry_to_dto(record.entry),
+            )
+            for record in records
+        )
+        next_cursor = (
+            _encode_trash_cursor(items[-1]) if has_more and items else None
+        )
         return PageDTO(items=items, next_cursor=next_cursor)
 
 
@@ -191,3 +237,38 @@ def _decode_cursor(
         return cursor
     except (ValueError, TypeError, binascii.Error, json.JSONDecodeError) as exc:
         raise ApplicationValidationError("The pagination cursor is invalid.") from exc
+
+
+def _encode_trash_cursor(item: TrashedEntryDTO) -> str:
+    payload = json.dumps(
+        {
+            "v": 1,
+            "kind": "trash",
+            "at": item.trash_item.trashed_at.isoformat(),
+            "id": str(item.trash_item.id),
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_trash_cursor(value: str | None) -> TrashCursorDTO | None:
+    if value is None:
+        return None
+    try:
+        padding = "=" * (-len(value) % 4)
+        decoded: Any = json.loads(base64.urlsafe_b64decode(value + padding))
+        if (
+            not isinstance(decoded, dict)
+            or decoded.get("v") != 1
+            or decoded.get("kind") != "trash"
+        ):
+            raise ValueError
+        trashed_at = datetime.fromisoformat(str(decoded["at"]))
+        if trashed_at.tzinfo is None:
+            raise ValueError
+        trash_item_id = UUID(str(decoded["id"]))
+    except (KeyError, ValueError, TypeError, binascii.Error, json.JSONDecodeError) as exc:
+        raise ApplicationValidationError("The trash cursor is invalid.") from exc
+    return TrashCursorDTO(trashed_at=trashed_at, trash_item_id=trash_item_id)

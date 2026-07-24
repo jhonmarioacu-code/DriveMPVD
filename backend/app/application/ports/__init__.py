@@ -1,5 +1,6 @@
 """Interfaces implemented by infrastructure adapters."""
 
+from app.application.ports.activity_repository import ActivityRepository
 from app.application.ports.auth_repositories import (
     AdminAccountRepository,
     AuthSessionRepository,
@@ -26,6 +27,7 @@ from app.application.ports.storage_repository import StorageRepository
 from app.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 __all__ = [
+    "ActivityRepository",
     "AdminAccountRepository",
     "AuthSessionRepository",
     "Clock",

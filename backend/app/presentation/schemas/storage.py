@@ -135,6 +135,7 @@ class StorageEntryData(StorageModel):
     current_version_number: int | None
     created_at: datetime
     updated_at: datetime
+    is_favorite: bool = False
 
 
 class FolderEntriesData(StorageModel):
@@ -158,6 +159,7 @@ class FolderEntriesData(StorageModel):
                             "current_version_number": None,
                             "created_at": "2026-07-18T18:00:00Z",
                             "updated_at": "2026-07-18T18:00:00Z",
+                            "is_favorite": False,
                         }
                     ],
                 }

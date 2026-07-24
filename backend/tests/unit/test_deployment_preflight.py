@@ -35,6 +35,7 @@ def _valid_values() -> dict[str, str]:
             f"{postgres_password}@postgres:5432/drivempvd"
         ),
         "DRIVEMPVD_STORAGE_ROOT": "/data/storage",
+        "VITE_API_BASE_URL": "/api/v1",
         "DRIVEMPVD_MAX_UPLOAD_SIZE_BYTES": str(50 * 1024 * 1024 * 1024),
         "DRIVEMPVD_NGINX_CLIENT_MAX_BODY_SIZE": "50g",
         "DRIVEMPVD_STORAGE_PATH": "/data/storage",
@@ -59,6 +60,7 @@ def test_preflight_rejects_insecure_or_incoherent_values() -> None:
             "DRIVEMPVD_AUTH_COOKIE_SECURE": "false",
             "DRIVEMPVD_IMAGE_TAG": "latest",
             "DRIVEMPVD_NGINX_CLIENT_MAX_BODY_SIZE": "1g",
+            "VITE_API_BASE_URL": "https://api.example.test/v1",
             "DRIVEMPVD_TLS_CERTIFICATES_PATH": "/etc/letsencrypt/live/example.com",
             "DRIVEMPVD_HTTPS_PORT": "80",
         }
@@ -69,6 +71,7 @@ def test_preflight_rejects_insecure_or_incoherent_values() -> None:
     assert any("AUTH_COOKIE_SECURE" in finding for finding in findings)
     assert any("non-floating" in finding for finding in findings)
     assert any("NGINX_CLIENT_MAX_BODY_SIZE" in finding for finding in findings)
+    assert any("VITE_API_BASE_URL" in finding for finding in findings)
     assert any("dereferenced PEM" in finding for finding in findings)
     assert any("must differ" in finding for finding in findings)
 
@@ -85,24 +88,122 @@ def test_deployment_files_keep_the_hardened_proxy_and_smoke_contract() -> None:
     proxy_headers = (project_root / "docker/nginx/proxy-headers.conf").read_text(
         encoding="utf-8"
     )
+    security_headers = (project_root / "docker/nginx/security-headers.conf").read_text(
+        encoding="utf-8"
+    )
     selector = (project_root / "docker/nginx/40-select-configuration.sh").read_text(
         encoding="utf-8"
     )
     smoke = (project_root / "docker/verify-deployment.sh").read_text(encoding="utf-8")
+    frontend_nginx = (project_root / "docker/frontend/nginx.conf").read_text(
+        encoding="utf-8"
+    )
+    frontend_dockerfile = (project_root / "docker/frontend.Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    edge_dockerfile = (project_root / "docker/nginx/Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    edge_entrypoint = (project_root / "docker/nginx/entrypoint.sh").read_text(
+        encoding="utf-8"
+    )
+    backend_dockerfile = (project_root / "docker/backend.Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    backend_test_dockerfile = (
+        project_root / "docker/backend.test.Dockerfile"
+    ).read_text(encoding="utf-8")
+    postgres_dockerfile = (project_root / "docker/postgres.Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    postgres_entrypoint = (project_root / "docker/postgres-entrypoint.sh").read_text(
+        encoding="utf-8"
+    )
 
     assert "internal: true" in compose
     assert "DRIVEMPVD_IMAGE_TAG" in compose
+    assert "${DRIVEMPVD_COMPOSE_ENV_FILE:-./docker/.env}" in compose
+    assert "drivempvd-postgres:${DRIVEMPVD_IMAGE_TAG:-local}" in compose
+    assert compose.count("build: *api-build") == 1
+    assert "nofile:" in compose
+    assert "soft: 65536" in compose
+    assert compose.count("no-new-privileges:true") == 5
+    assert compose.count("cap_drop:") == 5
+    assert "cap_add:\n      - NET_BIND_SERVICE" in compose
+    assert "- /tmp:rw,noexec,nosuid,size=128m" in compose
+    assert "DRIVEMPVD_API_WORKERS:-2" in compose
+    assert "DRIVEMPVD_POSTGRES_MEMORY_LIMIT:-4g" in compose
+    assert compose.count("mem_limit:") == 7
+    assert compose.count("mem_reservation:") == 7
+    assert compose.count("pids_limit:") == 7
+    assert "worker:" in compose
+    assert "app.infrastructure.cli.process_storage_outbox" in compose
+    assert "DRIVEMPVD_WORKER_MEMORY_LIMIT:-512m" in compose
+    assert 'DRIVEMPVD_DATABASE_POOL_SIZE: "1"' in compose
+    assert 'DRIVEMPVD_DATABASE_MAX_OVERFLOW: "0"' in compose
+    assert "drivempvd-storage-outbox.heartbeat" in compose
     assert "resolver 127.0.0.11" in nginx
     assert '"request":"$request"' not in nginx
     assert "limit_conn uploads_per_ip 2;" in locations
+    assert "location = /api/v1/storage/uploads {" in locations
     assert "proxy_request_buffering off;" in locations
     assert "return 404;" in locations
     assert "X-Forwarded-For $remote_addr" in proxy_headers
     assert "$proxy_add_x_forwarded_for" not in proxy_headers
+    assert 'Cross-Origin-Embedder-Policy "require-corp"' in security_headers
+    assert 'Cross-Origin-Opener-Policy "same-origin"' in security_headers
+    assert 'Cross-Origin-Resource-Policy "same-origin"' in security_headers
+    assert "style-src 'self';" in security_headers
+    assert "'unsafe-inline'" not in security_headers
+    assert "node:22.23.1-alpine@sha256:" in frontend_dockerfile
+    assert "nginx:1.30.4-alpine@sha256:" in frontend_dockerfile
+    assert "nginx:1.30.4-alpine@sha256:" in edge_dockerfile
+    assert "USER nginx" in edge_dockerfile
+    assert "drivempvd-nginx-entrypoint.sh" in edge_dockerfile
+    assert "-c /tmp/drivempvd-nginx/nginx.conf" in edge_entrypoint
+    assert "python:3.13.14-slim-bookworm@sha256:" in backend_dockerfile
+    assert "python:3.13.14-slim-bookworm@sha256:" in backend_test_dockerfile
+    assert "USER drivempvd" in backend_test_dockerfile
+    assert "USER node" in (
+        (project_root / "docker/frontend.test.Dockerfile").read_text(encoding="utf-8")
+    )
+    assert "alpine:3.24.1@sha256:" in postgres_dockerfile
+    assert "postgresql16=16.14-r0" in postgres_dockerfile
+    assert "postgresql16-client=16.14-r0" in postgres_dockerfile
+    assert "USER postgres" in postgres_dockerfile
+    assert "ENV PGDATA=/var/lib/postgresql/data/pgdata" in postgres_dockerfile
+    assert "install -d -m 3777 -o postgres -g postgres /run/postgresql" in (
+        postgres_dockerfile
+    )
+    assert "postgres-entrypoint.sh" in postgres_dockerfile
+    assert "--auth-host=scram-sha-256" in postgres_entrypoint
+    assert "--auth-local=trust" in postgres_entrypoint
+    assert "listen_addresses = '*'" in postgres_entrypoint
+    assert "0.0.0.0/0" in postgres_entrypoint
+    assert "::0/0" in postgres_entrypoint
+    assert "POSTGRES_PASSWORD must be set" in postgres_entrypoint
+    assert "postgres_root=/var/lib/postgresql/data" in postgres_entrypoint
+    assert "PGDATA must be %s/pgdata" in postgres_entrypoint
+    assert "mktemp -p /tmp postgres-password.XXXXXX" in postgres_entrypoint
+    assert "postgres-init:" in compose
+    assert 'user: "70:70"' in compose
+    assert "service_completed_successfully" in compose
+    assert "- DAC_OVERRIDE" in compose
+    assert "- FOWNER" in compose
     assert "production requires DRIVEMPVD_TLS_ENABLED=true" in selector
+    assert "runtime_root=/tmp/drivempvd-nginx" in selector
+    assert 'nginx -t -c "$runtime_config"' in selector
+    assert "user nginx;" not in nginx
+    assert "pid /tmp/nginx.pid;" in nginx
+    assert "include /tmp/drivempvd-nginx/conf.d/*.conf;" in nginx
     assert "DRIVEMPVD_SMOKE_PASSWORD_FILE" in smoke
+    assert "root_headers" in smoke
+    assert "Cache-Control: no-store" in smoke
     assert "compose_env_value" in smoke
     assert "DRIVEMPVD_SMOKE_BASE_URL must be set" in smoke
+    assert "published_http_port=${published_http_port##*:}" in smoke
+    assert "must end with a valid TCP port" in smoke
+    assert "http://127.0.0.1:${published_http_port}" in smoke
     assert '"password": sys.argv[2]' not in smoke
     assert '--data "$login_payload"' not in smoke
     assert '--data-binary "@$login_payload"' in smoke
@@ -112,3 +213,15 @@ def test_deployment_files_keep_the_hardened_proxy_and_smoke_contract() -> None:
     assert "csrf_status=" in smoke
     assert "purge_entry" in smoke
     assert "Range: bytes=0-3" in smoke
+    assert "pid /tmp/nginx.pid;" in frontend_nginx
+    assert "/tmp/nginx/" not in frontend_nginx
+    assert "/var/cache/nginx" not in frontend_nginx
+    temporary_paths = {
+        "client_body_temp_path": "client_temp",
+        "proxy_temp_path": "proxy_temp",
+        "fastcgi_temp_path": "fastcgi_temp",
+        "uwsgi_temp_path": "uwsgi_temp",
+        "scgi_temp_path": "scgi_temp",
+    }
+    for directive, path in temporary_paths.items():
+        assert f"{directive} /tmp/{path};" in frontend_nginx

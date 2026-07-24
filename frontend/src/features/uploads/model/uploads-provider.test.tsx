@@ -11,6 +11,7 @@ import {
   startUpload,
 } from "@/features/uploads/api/uploads-api";
 import { UploadsProvider } from "@/features/uploads/model/uploads-provider";
+import { queryNamespaces } from "@/shared/query-keys";
 import { uploadTaskLabel, useUploads } from "@/features/uploads/model/uploads-context";
 import { ApiClientError } from "@/shared/api/client";
 
@@ -130,7 +131,9 @@ describe("UploadsProvider", () => {
       0, 4, 8,
     ]);
     expect(completeUpload).toHaveBeenCalledWith(session.id, expect.any(AbortSignal));
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["explorer"] });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryNamespaces.explorer,
+    });
   });
 
   it("reanuda una sesión existente después de un error recuperable", async () => {

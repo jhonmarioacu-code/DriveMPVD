@@ -49,6 +49,14 @@ class AdminAccount:
         self.last_login_at = now
         self.updated_at = now
 
+    def change_password(self, *, password_hash: str, now: datetime) -> None:
+        """Replace credentials and clear any credential lock state."""
+        self.password_hash = password_hash
+        self.password_changed_at = now
+        self.failed_login_attempts = 0
+        self.locked_until = None
+        self.updated_at = now
+
 
 @dataclass(slots=True)
 class AuthSession:

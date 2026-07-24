@@ -18,6 +18,28 @@ import {
 } from "@/features/viewers/model";
 import { Button } from "@/shared/ui/button";
 import { ModalDialog } from "@/shared/ui/modal-dialog";
+import { cn } from "@/shared/utils/cn";
+
+const imageZoomClasses: Record<number, string> = {
+  0.5: "viewer-image-zoom-50",
+  0.75: "viewer-image-zoom-75",
+  1: "viewer-image-zoom-100",
+  1.25: "viewer-image-zoom-125",
+  1.5: "viewer-image-zoom-150",
+  1.75: "viewer-image-zoom-175",
+  2: "viewer-image-zoom-200",
+  2.25: "viewer-image-zoom-225",
+  2.5: "viewer-image-zoom-250",
+  2.75: "viewer-image-zoom-275",
+  3: "viewer-image-zoom-300",
+};
+
+const imageRotationClasses: Record<number, string> = {
+  0: "viewer-image-rotate-0",
+  90: "viewer-image-rotate-90",
+  180: "viewer-image-rotate-180",
+  270: "viewer-image-rotate-270",
+};
 
 function MediaSurface({
   file,
@@ -39,10 +61,13 @@ function MediaSurface({
       <div className="grid min-h-72 max-h-[65vh] place-items-center overflow-auto bg-canvas p-5 sm:min-h-96">
         <img
           alt={`Vista previa de ${file.name}`}
-          className="max-h-[56vh] max-w-full object-contain transition-transform duration-150"
+          className={cn(
+            "viewer-image max-h-[56vh] max-w-full object-contain transition-transform duration-150",
+            imageZoomClasses[zoom],
+            imageRotationClasses[rotation],
+          )}
           onError={onMediaError}
           src={source}
-          style={{ transform: `scale(${String(zoom)}) rotate(${String(rotation)}deg)` }}
         />
       </div>
     );

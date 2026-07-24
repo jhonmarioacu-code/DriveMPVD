@@ -11,6 +11,7 @@ from app.application.dtos.storage import (
     StorageListFiltersDTO,
     StoragePageCursorDTO,
     StorageSortField,
+    TrashCursorDTO,
 )
 from app.domain.storage.entities import (
     File,
@@ -29,6 +30,14 @@ class StorageTreeNode:
 
     entry: Folder | File
     depth: int
+
+
+@dataclass(frozen=True, slots=True)
+class TrashedEntryRecord:
+    """A trash tombstone joined to its deleted logical entry."""
+
+    trash_item: TrashItem
+    entry: Folder | File
 
 
 class StorageRepository(Protocol):
@@ -89,6 +98,30 @@ class StorageRepository(Protocol):
 
     async def get_storage_object(self, object_id: UUID) -> StorageObject | None: ...
 
+    async def get_storage_objects_by_keys(
+        self,
+        keys: tuple[str, ...],
+    ) -> tuple[StorageObject, ...]: ...
+
+    async def list_storage_objects(
+        self,
+        *,
+        after_id: UUID | None,
+        limit: int,
+    ) -> tuple[tuple[StorageObject, ...], UUID | None]: ...
+
+    async def claim_orphan_storage_objects(
+        self,
+        *,
+        limit: int,
+    ) -> tuple[tuple[StorageObject, ...], bool]:
+        """Lock a bounded set of unreferenced ready objects for detachment."""
+        ...
+
+    async def delete_claimed_orphan_storage_object(self, object_id: UUID) -> bool:
+        """Detach one still-unreferenced claimed object from database metadata."""
+        ...
+
     async def save_entry(self, entry: StorageEntry) -> None: ...
 
     async def soft_delete_subtree(
@@ -98,6 +131,11 @@ class StorageRepository(Protocol):
     async def restore_subtree(self, root_id: UUID, *, restored_at: datetime) -> int: ...
 
     async def get_current_version(self, file_id: UUID) -> FileVersion | None: ...
+
+    async def get_current_versions_batch(
+        self,
+        file_ids: tuple[UUID, ...],
+    ) -> dict[UUID, FileVersion]: ...
 
     def stream_subtree(self, root_id: UUID) -> AsyncIterator[StorageTreeNode]: ...
 
@@ -111,6 +149,14 @@ class StorageRepository(Protocol):
     ) -> TrashItem | None: ...
 
     async def get_trash_item_by_entry(self, entry_id: UUID) -> TrashItem | None: ...
+
+    async def list_trash(
+        self,
+        *,
+        owner_id: UUID,
+        limit: int,
+        cursor: TrashCursorDTO | None,
+    ) -> tuple[tuple[TrashedEntryRecord, ...], bool]: ...
 
     async def remove_trash_item(self, trash_item_id: UUID) -> None: ...
 
@@ -126,3 +172,15 @@ class StorageRepository(Protocol):
     ) -> UploadSession | None: ...
 
     async def save_upload_session(self, session: UploadSession) -> None: ...
+
+    async def get_upload_sessions_by_ids(
+        self,
+        upload_ids: tuple[UUID, ...],
+    ) -> tuple[UploadSession, ...]: ...
+
+    async def claim_expired_upload_sessions(
+        self,
+        *,
+        expired_at: datetime,
+        limit: int,
+    ) -> tuple[UploadSession, ...]: ...

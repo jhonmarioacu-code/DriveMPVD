@@ -6,6 +6,7 @@ implemented by local storage, S3 or MinIO without changing application code.
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import datetime
 from typing import NewType, Protocol
 from uuid import UUID
 
@@ -26,6 +27,24 @@ class StoredObjectDTO:
 
     key: StorageKey
     size: int
+
+
+@dataclass(frozen=True, slots=True)
+class PhysicalObjectDTO:
+    """One opaque object discovered during a filesystem reconciliation."""
+
+    key: StorageKey
+    size: int
+    modified_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class StagedUploadDTO:
+    """One staged upload discovered independently from PostgreSQL."""
+
+    upload_id: UUID
+    size: int
+    modified_at: datetime
 
 
 class FileStorageProvider(Protocol):
@@ -85,4 +104,16 @@ class FileStorageProvider(Protocol):
 
     async def delete(self, key: StorageKey) -> None:
         """Delete an object idempotently."""
+        ...
+
+    def list_objects(self) -> AsyncIterator[PhysicalObjectDTO]:
+        """Walk physical objects with bounded per-directory memory."""
+        ...
+
+    def list_staged_uploads(self) -> AsyncIterator[StagedUploadDTO]:
+        """Walk valid opaque staging files for reconciliation."""
+        ...
+
+    async def quarantine(self, key: StorageKey) -> None:
+        """Move an unreferenced object to recoverable ``lost+found`` storage."""
         ...

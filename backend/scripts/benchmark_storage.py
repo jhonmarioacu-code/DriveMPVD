@@ -11,6 +11,7 @@ import argparse
 import asyncio
 import json
 import shutil
+import sys
 import tempfile
 import time
 import tracemalloc
@@ -18,6 +19,10 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
 
 from app.infrastructure.storage.local import LocalFileStorageProvider
 

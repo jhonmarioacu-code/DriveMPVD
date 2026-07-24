@@ -15,6 +15,9 @@ def test_settings_load_all_runtime_values_from_environment(
     monkeypatch.setenv("DRIVEMPVD_STORAGE_ROOT", str(Path.cwd().anchor))
     monkeypatch.setenv("DRIVEMPVD_DEFAULT_PAGE_SIZE", "25")
     monkeypatch.setenv("DRIVEMPVD_MAX_PAGE_SIZE", "100")
+    monkeypatch.setenv("DRIVEMPVD_OUTBOX_WORKER_POLL_SECONDS", "10")
+    monkeypatch.setenv("DRIVEMPVD_OUTBOX_WORKER_EVENT_BATCH_SIZE", "20")
+    monkeypatch.setenv("DRIVEMPVD_OUTBOX_ORPHAN_SWEEP_BATCH_SIZE", "30")
 
     settings = Settings(_env_file=None)
 
@@ -23,6 +26,9 @@ def test_settings_load_all_runtime_values_from_environment(
     assert settings.api_prefix == "/api/test"
     assert settings.default_page_size == 25
     assert settings.max_page_size == 100
+    assert settings.outbox_worker_poll_seconds == 10
+    assert settings.outbox_worker_event_batch_size == 20
+    assert settings.outbox_orphan_sweep_batch_size == 30
 
 
 def test_settings_reject_relative_storage_root() -> None:
@@ -48,6 +54,38 @@ def test_settings_allows_a_write_buffer_larger_than_a_network_chunk() -> None:
     )
 
     assert settings.storage_write_buffer_size_bytes == 1024 * 1024
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("outbox_worker_poll_seconds", 0),
+        ("outbox_worker_event_batch_size", 0),
+        ("outbox_worker_event_batch_size", 201),
+        ("outbox_orphan_sweep_batch_size", 0),
+        ("outbox_orphan_sweep_batch_size", 1_001),
+    ],
+)
+def test_settings_reject_invalid_outbox_worker_bounds(field: str, value: int) -> None:
+    with pytest.raises(ValidationError):
+        _settings_with_outbox_value(field, value)
+
+
+def _settings_with_outbox_value(field: str, value: int) -> Settings:
+    if field == "outbox_worker_poll_seconds":
+        return Settings(
+            storage_root=Path.cwd().anchor,
+            outbox_worker_poll_seconds=value,
+        )
+    if field == "outbox_worker_event_batch_size":
+        return Settings(
+            storage_root=Path.cwd().anchor,
+            outbox_worker_event_batch_size=value,
+        )
+    return Settings(
+        storage_root=Path.cwd().anchor,
+        outbox_orphan_sweep_batch_size=value,
+    )
 
 
 def test_production_rejects_default_duplicate_or_short_auth_secrets() -> None:

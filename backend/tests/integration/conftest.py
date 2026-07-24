@@ -71,7 +71,8 @@ async def clean_auth(database: Database) -> AsyncIterator[None]:
 @pytest.fixture
 async def clean_storage(database: Database) -> AsyncIterator[None]:
     statement = text(
-        "TRUNCATE TABLE thumbnails, previews, upload_sessions, trash_items, "
+        "TRUNCATE TABLE recent_opens, favorites, thumbnails, previews, "
+        "upload_sessions, trash_items, "
         "file_versions, file_metadata, storage_entries, storage_objects, "
         "security_events, auth_sessions, auth_rate_limits, admin_accounts, "
         "outbox_events CASCADE"

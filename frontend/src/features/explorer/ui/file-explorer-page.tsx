@@ -1,12 +1,12 @@
 import {
   ArrowDownAZ,
   ArrowDownUp,
-  CheckSquare2,
   ChevronRight,
   Download,
   Eye,
   ExternalLink,
   FolderPlus,
+  Heart,
   LoaderCircle,
   MoreHorizontal,
   Move,
@@ -19,6 +19,7 @@ import {
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { useRecordRecentOpen, useToggleFavorite } from "@/features/activity";
 import {
   useFolderEntries,
   useFolderNavigation,
@@ -29,7 +30,7 @@ import {
   formatModifiedDate,
 } from "@/features/explorer/model/formatters";
 import { downloadFile, openFile } from "@/features/explorer/model/file-actions";
-import { useUploads } from "@/features/uploads";
+import { useUploadsDispatch } from "@/features/uploads/model/uploads-context";
 import { EntryThumbnail, FileViewerDialog, isPreviewable } from "@/features/viewers";
 import {
   CreateFolderDialog,
@@ -54,19 +55,25 @@ function EntryRow({
   entry,
   onOpen,
   onSelect,
+  onToggleFavorite,
+  favoritePending,
   selected,
 }: {
   entry: StorageEntry;
   onOpen: () => void;
   onSelect: () => void;
+  onToggleFavorite: () => void;
+  favoritePending: boolean;
   selected: boolean;
 }) {
+  const favorite = entry.is_favorite ?? false;
   return (
     <div
       aria-selected={selected}
       className={cn("explorer-row group", selected && "explorer-row-selected")}
       onDoubleClick={onOpen}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter") onOpen();
         if (event.key === " ") {
           event.preventDefault();
@@ -86,32 +93,34 @@ function EntryRow({
           type="checkbox"
         />
       </div>
-      <button
-        className="flex min-w-0 items-center gap-3 text-left"
-        onClick={onOpen}
-        type="button"
-      >
-        <span
-          className={cn(
-            "grid size-9 shrink-0 place-items-center rounded-xl",
-            entry.kind === "folder"
-              ? "bg-brand-soft text-brand"
-              : "bg-surface-raised text-muted",
-          )}
+      <div role="gridcell">
+        <button
+          className="flex min-w-0 items-center gap-3 text-left"
+          onClick={onOpen}
+          type="button"
         >
-          {entry.kind === "file" ? (
-            <EntryThumbnail file={entry} />
-          ) : (
-            <EntryIcon entry={entry} />
-          )}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold">{entry.name}</span>
-          <span className="mt-0.5 block text-[0.68rem] text-muted md:hidden">
-            {entry.kind === "folder" ? "Carpeta" : formatFileSize(entry.size)}
+          <span
+            className={cn(
+              "grid size-9 shrink-0 place-items-center rounded-xl",
+              entry.kind === "folder"
+                ? "bg-brand-soft text-brand"
+                : "bg-surface-raised text-muted",
+            )}
+          >
+            {entry.kind === "file" ? (
+              <EntryThumbnail file={entry} />
+            ) : (
+              <EntryIcon entry={entry} />
+            )}
           </span>
-        </span>
-      </button>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold">{entry.name}</span>
+            <span className="mt-0.5 block text-[0.68rem] text-muted md:hidden">
+              {entry.kind === "folder" ? "Carpeta" : formatFileSize(entry.size)}
+            </span>
+          </span>
+        </button>
+      </div>
       <span className="hidden truncate text-xs text-muted md:block" role="gridcell">
         {entry.kind === "folder"
           ? "Carpeta"
@@ -123,18 +132,46 @@ function EntryRow({
       <span className="hidden text-right text-xs text-muted lg:block" role="gridcell">
         {formatModifiedDate(entry.updated_at)}
       </span>
-      <button
-        aria-label={`Abrir ${entry.name}`}
-        className="grid size-8 place-items-center rounded-lg text-muted opacity-100 hover:bg-surface-raised hover:text-foreground md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-        onClick={onOpen}
-        type="button"
-      >
-        {entry.kind === "folder" ? (
-          <ChevronRight aria-hidden="true" className="size-4" />
-        ) : (
-          <MoreHorizontal aria-hidden="true" className="size-4" />
-        )}
-      </button>
+      <div className="flex justify-end" role="gridcell">
+        <button
+          aria-label={
+            favorite
+              ? `Quitar ${entry.name} de favoritos`
+              : `Añadir ${entry.name} a favoritos`
+          }
+          aria-pressed={favorite}
+          className={cn(
+            "grid size-8 place-items-center rounded-lg text-muted hover:bg-surface-raised hover:text-foreground md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+            favorite && "text-brand opacity-100",
+          )}
+          disabled={favoritePending}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleFavorite();
+          }}
+          title={favorite ? "Quitar de favoritos" : "Añadir a favoritos"}
+          type="button"
+        >
+          <Heart
+            aria-hidden="true"
+            className={favorite ? "size-4 fill-current" : "size-4"}
+          />
+        </button>
+      </div>
+      <div className="flex justify-end" role="gridcell">
+        <button
+          aria-label={`Abrir ${entry.name}`}
+          className="grid size-8 place-items-center rounded-lg text-muted opacity-100 hover:bg-surface-raised hover:text-foreground md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+          onClick={onOpen}
+          type="button"
+        >
+          {entry.kind === "folder" ? (
+            <ChevronRight aria-hidden="true" className="size-4" />
+          ) : (
+            <MoreHorizontal aria-hidden="true" className="size-4" />
+          )}
+        </button>
+      </div>
     </div>
   );
 }
@@ -153,7 +190,10 @@ export function FileExplorerPage() {
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { enqueueFiles } = useUploads();
+  const { enqueueFiles } = useUploadsDispatch();
+  const toggleFavorite = useToggleFavorite();
+  const recordRecentOpen = useRecordRecentOpen();
+  const [activityNotice, setActivityNotice] = useState<string | null>(null);
 
   const navigation = useFolderNavigation(folderId);
   const currentFolderId = navigation.data?.folder.id;
@@ -185,12 +225,29 @@ export function FileExplorerPage() {
   };
 
   const openEntry = (entry: StorageEntry) => {
+    recordRecentOpen.mutate(entry.id, {
+      onError: () => {
+        setActivityNotice("No fue posible actualizar Recientes. Inténtalo de nuevo.");
+      },
+    });
     if (entry.kind === "folder") {
       resetLocationState();
       void navigate(`/files/${encodeURIComponent(entry.id)}`);
     } else {
       setDetailsEntry(entry);
     }
+  };
+
+  const changeFavorite = (entry: StorageEntry) => {
+    setActivityNotice(null);
+    toggleFavorite.mutate(
+      { entryId: entry.id, isFavorite: entry.is_favorite ?? false },
+      {
+        onError: (error) => {
+          setActivityNotice(explorerErrorMessage(error));
+        },
+      },
+    );
   };
 
   const toggleSelection = (entryId: string) => {
@@ -202,8 +259,15 @@ export function FileExplorerPage() {
     });
   };
 
-  const previewFile = (entry: StorageEntry) => {
+  const previewFile = (entry: StorageEntry, alreadyRecorded = false) => {
     if (entry.kind !== "file" || !isPreviewable(entry)) return;
+    if (!alreadyRecorded) {
+      recordRecentOpen.mutate(entry.id, {
+        onError: () => {
+          setActivityNotice("No fue posible actualizar Recientes. Inténtalo de nuevo.");
+        },
+      });
+    }
     setDetailsEntry(null);
     setPreviewEntry(entry);
   };
@@ -443,15 +507,16 @@ export function FileExplorerPage() {
         ) : null}
       </section>
 
-      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-border bg-surface p-3 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
+      <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-surface p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+        <label className="relative block min-w-0">
+          <span className="sr-only">Filtrar esta carpeta</span>
           <Search
             aria-hidden="true"
             className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted"
           />
           <input
             aria-label="Filtrar esta carpeta"
-            className="auth-input pl-9"
+            className="auth-input explorer-search-input"
             onChange={(event) => {
               clearSelection();
               setSearch(event.target.value);
@@ -460,26 +525,31 @@ export function FileExplorerPage() {
             type="search"
             value={search}
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <ArrowDownAZ aria-hidden="true" className="size-4 text-muted" />
-          <label className="sr-only" htmlFor="explorer-sort">
-            Ordenar por
-          </label>
-          <select
-            className="h-10 min-w-32 rounded-xl border border-border bg-surface px-3 text-sm outline-none focus:border-brand"
-            id="explorer-sort"
-            onChange={(event) => {
-              clearSelection();
-              setSortBy(event.target.value as StorageSortField);
-            }}
-            value={sortBy}
-          >
-            <option value="name">Nombre</option>
-            <option value="date">Fecha</option>
-            <option value="size">Tamaño</option>
-            <option value="type">Tipo</option>
-          </select>
+        </label>
+        <div className="grid grid-cols-[minmax(0,1fr)_2.5rem] items-center gap-2 sm:flex">
+          <div className="relative min-w-0 flex-1 sm:flex-none">
+            <ArrowDownAZ
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted"
+            />
+            <label className="sr-only" htmlFor="explorer-sort">
+              Ordenar por
+            </label>
+            <select
+              className="h-10 w-full min-w-0 rounded-xl border border-border bg-surface py-0 pr-3 pl-9 text-sm outline-none focus:border-brand sm:w-36"
+              id="explorer-sort"
+              onChange={(event) => {
+                clearSelection();
+                setSortBy(event.target.value as StorageSortField);
+              }}
+              value={sortBy}
+            >
+              <option value="name">Nombre</option>
+              <option value="date">Fecha</option>
+              <option value="size">Tamaño</option>
+              <option value="type">Tipo</option>
+            </select>
+          </div>
           <button
             aria-label={direction === "asc" ? "Orden ascendente" : "Orden descendente"}
             className="icon-button"
@@ -494,66 +564,108 @@ export function FileExplorerPage() {
         </div>
       </div>
 
-      <section aria-label="Contenido de la carpeta" className="mt-4">
-        <div className="explorer-grid-header" role="row">
-          <input
-            aria-label="Seleccionar todos los elementos visibles"
-            checked={allSelected}
-            className="size-4 accent-brand"
-            onChange={toggleAll}
-            type="checkbox"
-          />
-          <span>Nombre</span>
-          <span className="hidden md:block">Tipo</span>
-          <span className="hidden text-right md:block">Tamaño</span>
-          <span className="hidden text-right lg:block">Modificado</span>
-          <CheckSquare2 aria-hidden="true" className="size-4 text-muted" />
-        </div>
+      {activityNotice === null ? null : (
+        <p className="auth-alert mt-3" role="alert">
+          {activityNotice}
+        </p>
+      )}
 
-        <div aria-label="Archivos y carpetas" className="space-y-1" role="grid">
-          {entriesQuery.isPending ? (
-            <div className="p-12 text-center text-sm text-muted" role="status">
-              <LoaderCircle className="mx-auto mb-3 size-6 animate-spin text-brand" />
-              Cargando contenido…
-            </div>
-          ) : entriesQuery.isError ? (
-            <div className="p-10 text-center">
-              <p className="font-semibold">No se pudo cargar el contenido</p>
-              <p className="mt-2 text-sm text-muted">
-                {explorerErrorMessage(entriesQuery.error)}
-              </p>
-              <Button
-                className="mt-4"
-                onClick={() => void entriesQuery.refetch()}
-                size="sm"
-                variant="secondary"
+      <section aria-label="Contenido de la carpeta" className="mt-4">
+        <div aria-label="Archivos y carpetas" role="grid">
+          <div role="rowgroup">
+            <div className="explorer-grid-header" role="row">
+              <div aria-label="Selección" role="columnheader">
+                <input
+                  aria-label="Seleccionar todos los elementos visibles"
+                  checked={allSelected}
+                  className="size-4 accent-brand"
+                  onChange={toggleAll}
+                  type="checkbox"
+                />
+              </div>
+              <span role="columnheader">Nombre</span>
+              <span className="hidden md:block" role="columnheader">
+                Tipo
+              </span>
+              <span className="hidden text-right md:block" role="columnheader">
+                Tamaño
+              </span>
+              <span className="hidden text-right lg:block" role="columnheader">
+                Modificado
+              </span>
+              <span
+                aria-label="Favoritos"
+                className="justify-self-end"
+                role="columnheader"
               >
-                <RefreshCw aria-hidden="true" className="size-4" />
-                Reintentar
-              </Button>
+                <Heart aria-hidden="true" className="size-4 text-muted" />
+              </span>
+              <span aria-label="Abrir" role="columnheader">
+                <MoreHorizontal aria-hidden="true" className="size-4 text-muted" />
+              </span>
             </div>
-          ) : entries.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="font-semibold">
-                {deferredSearch === "" ? "Esta carpeta está vacía" : "Sin resultados"}
-              </p>
-              <p className="mt-2 text-sm text-muted">
-                {deferredSearch === ""
-                  ? "Crea una carpeta para comenzar a organizar tus archivos."
-                  : "Prueba con otro nombre dentro de esta carpeta."}
-              </p>
-            </div>
-          ) : (
-            entries.map((entry) => (
-              <EntryRow
-                entry={entry}
-                key={entry.id}
-                onOpen={() => openEntry(entry)}
-                onSelect={() => toggleSelection(entry.id)}
-                selected={selectedIds.has(entry.id)}
-              />
-            ))
-          )}
+          </div>
+
+          <div className="space-y-1" role="rowgroup">
+            {entriesQuery.isPending ? (
+              <div role="row">
+                <div className="p-12 text-center text-sm text-muted" role="gridcell">
+                  <div role="status">
+                    <LoaderCircle className="mx-auto mb-3 size-6 animate-spin text-brand" />
+                    Cargando contenido…
+                  </div>
+                </div>
+              </div>
+            ) : entriesQuery.isError ? (
+              <div role="row">
+                <div className="p-10 text-center" role="gridcell">
+                  <p className="font-semibold">No se pudo cargar el contenido</p>
+                  <p className="mt-2 text-sm text-muted">
+                    {explorerErrorMessage(entriesQuery.error)}
+                  </p>
+                  <Button
+                    className="mt-4"
+                    onClick={() => void entriesQuery.refetch()}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    <RefreshCw aria-hidden="true" className="size-4" />
+                    Reintentar
+                  </Button>
+                </div>
+              </div>
+            ) : entries.length === 0 ? (
+              <div role="row">
+                <div className="p-12 text-center" role="gridcell">
+                  <p className="font-semibold">
+                    {deferredSearch === ""
+                      ? "Esta carpeta está vacía"
+                      : "Sin resultados"}
+                  </p>
+                  <p className="mt-2 text-sm text-muted">
+                    {deferredSearch === ""
+                      ? "Crea una carpeta para comenzar a organizar tus archivos."
+                      : "Prueba con otro nombre dentro de esta carpeta."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              entries.map((entry) => (
+                <EntryRow
+                  entry={entry}
+                  key={entry.id}
+                  onOpen={() => openEntry(entry)}
+                  onSelect={() => toggleSelection(entry.id)}
+                  onToggleFavorite={() => changeFavorite(entry)}
+                  favoritePending={
+                    toggleFavorite.isPending &&
+                    toggleFavorite.variables.entryId === entry.id
+                  }
+                  selected={selectedIds.has(entry.id)}
+                />
+              ))
+            )}
+          </div>
         </div>
 
         {entriesQuery.hasNextPage ? (
@@ -604,7 +716,7 @@ export function FileExplorerPage() {
           onClose={() => setDetailsEntry(null)}
           onDownload={() => downloadFile(detailsEntry)}
           onOpen={() => openFile(detailsEntry)}
-          onPreview={() => previewFile(detailsEntry)}
+          onPreview={() => previewFile(detailsEntry, true)}
         />
       )}
       {previewEntry === null ? null : (

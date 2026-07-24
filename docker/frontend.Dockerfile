@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:22.12-alpine AS build
+FROM node:22.23.1-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS build
 
 WORKDIR /app
 
@@ -17,13 +17,12 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
 
 RUN npm run build
 
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.30.4-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46 AS runtime
 
 COPY docker/frontend/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
-RUN mkdir -p /tmp/nginx \
-    && chown -R nginx:nginx /tmp/nginx /usr/share/nginx/html
+RUN chown -R nginx:nginx /usr/share/nginx/html
 
 USER nginx
 

@@ -1,0 +1,91 @@
+version: 2
+
+updates:
+  # Python backend — pyproject.toml + requirements.lock
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python-runtime:
+        patterns:
+          - "fastapi"
+          - "uvicorn*"
+          - "sqlalchemy*"
+          - "alembic"
+          - "asyncpg"
+          - "pydantic*"
+          - "pyjwt"
+          - "argon2-cffi"
+          - "python-dotenv"
+      python-dev:
+        patterns:
+          - "ruff"
+          - "mypy"
+          - "pytest*"
+          - "black"
+          - "httpx"
+          - "pip-audit"
+          - "pip-tools"
+
+  # Node.js frontend — package.json
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      react-ecosystem:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+          - "react-router*"
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+      vite-tooling:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "vitest"
+          - "@vitest/*"
+          - "typescript"
+          - "tailwindcss"
+          - "@tailwindcss/*"
+      testing:
+        patterns:
+          - "@testing-library/*"
+          - "jsdom"
+
+  # GitHub Actions — pinned SHA digests in .github/workflows/
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"

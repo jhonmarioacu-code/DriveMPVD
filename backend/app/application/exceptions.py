@@ -42,6 +42,12 @@ class DependencyUnavailableError(ApplicationError):
     default_message = "A required service is temporarily unavailable."
 
 
+class OutboxProcessingError(DependencyUnavailableError):
+    """A durable asynchronous maintenance operation could not complete."""
+
+    code = "system.outbox_processing_failed"
+
+
 class AuthenticationError(ApplicationError):
     """Credentials or authentication proof are invalid."""
 

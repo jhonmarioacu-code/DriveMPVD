@@ -95,6 +95,14 @@ class BootstrapAdminCommandDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class ChangeAdminPasswordCommandDTO:
+    """Local administrative credential rotation input."""
+
+    username: str
+    password: str
+
+
+@dataclass(frozen=True, slots=True)
 class RateLimitDecisionDTO:
     """Atomic rate-limit outcome."""
 

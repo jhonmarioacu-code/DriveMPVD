@@ -137,6 +137,12 @@ class StorageObjectModel(AuditColumnsMixin, Base):
         UniqueConstraint("storage_key", name="uq_storage_objects_storage_key"),
         Index("ix_storage_objects_checksum_size", "checksum_sha256", "size"),
         Index("ix_storage_objects_status_updated", "status", "updated_at"),
+        Index(
+            "ix_storage_objects_status_created_id",
+            "status",
+            "created_at",
+            "id",
+        ),
     )
     __mapper_args__: ClassVar[dict[str, bool]] = {  # type: ignore[misc]
         "eager_defaults": True
@@ -208,6 +214,11 @@ class ThumbnailModel(AuditColumnsMixin, Base):
         ),
         CheckConstraint("width IS NULL OR width > 0", name="width_positive"),
         CheckConstraint("height IS NULL OR height > 0", name="height_positive"),
+        Index(
+            "ix_thumbnails_storage_object_id",
+            "storage_object_id",
+            postgresql_where=text("storage_object_id IS NOT NULL"),
+        ),
     )
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
     file_version_id: Mapped[UUID] = mapped_column(
@@ -233,6 +244,11 @@ class PreviewModel(AuditColumnsMixin, Base):
             "file_version_id",
             "variant",
             name="uq_previews_version_variant",
+        ),
+        Index(
+            "ix_previews_storage_object_id",
+            "storage_object_id",
+            postgresql_where=text("storage_object_id IS NOT NULL"),
         ),
     )
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)

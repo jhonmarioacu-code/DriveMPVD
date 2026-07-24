@@ -3,6 +3,7 @@
 from types import TracebackType
 from typing import Protocol, Self
 
+from app.application.ports.activity_repository import ActivityRepository
 from app.application.ports.auth_repositories import (
     AdminAccountRepository,
     AuthSessionRepository,
@@ -28,6 +29,9 @@ class UnitOfWork(Protocol):
 
     @property
     def security_events(self) -> SecurityEventRepository: ...
+
+    @property
+    def activity(self) -> ActivityRepository: ...
 
     @property
     def storage(self) -> StorageRepository: ...

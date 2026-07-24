@@ -143,6 +143,9 @@ def validate(
             "DRIVEMPVD_STORAGE_ROOT must remain /data/storage inside the API container"
         )
 
+    if values.get("VITE_API_BASE_URL") != "/api/v1":
+        findings.append("VITE_API_BASE_URL must remain /api/v1 in production")
+
     maximum_upload = values.get("DRIVEMPVD_MAX_UPLOAD_SIZE_BYTES", "")
     try:
         maximum_upload_bytes = int(maximum_upload)

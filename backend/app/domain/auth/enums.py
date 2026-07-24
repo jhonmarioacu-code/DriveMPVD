@@ -7,6 +7,7 @@ class SecurityEventType(StrEnum):
     """Security-relevant actions retained for audit."""
 
     ADMIN_CREATED = "admin.created"
+    ADMIN_PASSWORD_CHANGED = "admin.password_changed"
     LOGIN_SUCCEEDED = "auth.login_succeeded"
     LOGIN_FAILED = "auth.login_failed"
     LOGOUT = "auth.logout"

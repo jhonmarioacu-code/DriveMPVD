@@ -2,9 +2,15 @@ x-api-build: &api-build
   context: .
   dockerfile: docker/backend.Dockerfile
 
+x-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 x-backend-runtime: &backend-runtime
   env_file:
-    - ./docker/.env
+    - ${DRIVEMPVD_COMPOSE_ENV_FILE:-./docker/.env}
   environment:
     PYTHONDONTWRITEBYTECODE: "1"
     PYTHONUNBUFFERED: "1"
@@ -20,10 +26,42 @@ x-backend-runtime: &backend-runtime
   user: "10001:10001"
 
 services:
+  postgres-init:
+    image: drivempvd-postgres:${DRIVEMPVD_IMAGE_TAG:-local}
+    user: "0:0"
+    mem_limit: ${DRIVEMPVD_POSTGRES_INIT_MEMORY_LIMIT:-128m}
+    mem_reservation: ${DRIVEMPVD_POSTGRES_INIT_MEMORY_RESERVATION:-32m}
+    cpus: ${DRIVEMPVD_POSTGRES_INIT_CPU_LIMIT:-0.25}
+    pids_limit: ${DRIVEMPVD_POSTGRES_INIT_PIDS_LIMIT:-64}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        install -d -m 0700 -o 70 -g 70 /var/lib/postgresql/data
+        install -d -m 0700 -o 70 -g 70 /var/lib/postgresql/data/pgdata
+        if [ "$(stat -c '%u:%g' /var/lib/postgresql/data)" != "70:70" ] || \
+           [ "$(stat -c '%u:%g' /var/lib/postgresql/data/pgdata)" != "70:70" ]; then
+          chown -R 70:70 /var/lib/postgresql/data
+        fi
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    restart: "no"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+    image: drivempvd-postgres:${DRIVEMPVD_IMAGE_TAG:-local}
     env_file:
-      - ./docker/.env
+      - ${DRIVEMPVD_COMPOSE_ENV_FILE:-./docker/.env}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?Define POSTGRES_DB in docker/.env}
       POSTGRES_USER: ${POSTGRES_USER:?Define POSTGRES_USER in docker/.env}
@@ -41,15 +79,35 @@ services:
       start_period: 10s
     networks:
       - private
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
+    user: "70:70"
+    mem_limit: ${DRIVEMPVD_POSTGRES_MEMORY_LIMIT:-4g}
+    mem_reservation: ${DRIVEMPVD_POSTGRES_MEMORY_RESERVATION:-1g}
+    cpus: ${DRIVEMPVD_POSTGRES_CPU_LIMIT:-1.25}
+    pids_limit: ${DRIVEMPVD_POSTGRES_PIDS_LIMIT:-256}
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=70,gid=70,mode=1777
+      - /run/postgresql:rw,nosuid,nodev,size=1m,uid=70,gid=70,mode=3777
     restart: unless-stopped
+    logging: *logging
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   migrate:
-    build: *api-build
     image: drivempvd-api:${DRIVEMPVD_IMAGE_TAG:-local}
     <<: *backend-runtime
     command: ["alembic", "upgrade", "head"]
+    mem_limit: ${DRIVEMPVD_MIGRATE_MEMORY_LIMIT:-1g}
+    mem_reservation: ${DRIVEMPVD_MIGRATE_MEMORY_RESERVATION:-256m}
+    cpus: ${DRIVEMPVD_MIGRATE_CPU_LIMIT:-1.0}
+    pids_limit: ${DRIVEMPVD_MIGRATE_PIDS_LIMIT:-256}
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,7 +117,11 @@ services:
     build: *api-build
     image: drivempvd-api:${DRIVEMPVD_IMAGE_TAG:-local}
     <<: *backend-runtime
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "${DRIVEMPVD_API_WORKERS:-2}"]
+    mem_limit: ${DRIVEMPVD_API_MEMORY_LIMIT:-2g}
+    mem_reservation: ${DRIVEMPVD_API_MEMORY_RESERVATION:-512m}
+    cpus: ${DRIVEMPVD_API_CPU_LIMIT:-2.0}
+    pids_limit: ${DRIVEMPVD_API_PIDS_LIMIT:-512}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -76,6 +138,42 @@ services:
       retries: 12
       start_period: 15s
     restart: unless-stopped
+    logging: *logging
+    volumes:
+      - type: bind
+        source: ${DRIVEMPVD_STORAGE_PATH:?Define DRIVEMPVD_STORAGE_PATH in docker/.env}
+        target: /data/storage
+        bind:
+          create_host_path: false
+
+  worker:
+    image: drivempvd-api:${DRIVEMPVD_IMAGE_TAG:-local}
+    <<: *backend-runtime
+    command: ["python", "-m", "app.infrastructure.cli.process_storage_outbox"]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      DRIVEMPVD_DATABASE_POOL_SIZE: "1"
+      DRIVEMPVD_DATABASE_MAX_OVERFLOW: "0"
+    mem_limit: ${DRIVEMPVD_WORKER_MEMORY_LIMIT:-512m}
+    mem_reservation: ${DRIVEMPVD_WORKER_MEMORY_RESERVATION:-128m}
+    cpus: ${DRIVEMPVD_WORKER_CPU_LIMIT:-0.5}
+    pids_limit: ${DRIVEMPVD_WORKER_PIDS_LIMIT:-256}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /tmp/drivempvd-storage-outbox.heartbeat && test $$(( $$(date +%s) - $$(stat -c %Y /tmp/drivempvd-storage-outbox.heartbeat) )) -lt 30",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging: *logging
     volumes:
       - type: bind
         source: ${DRIVEMPVD_STORAGE_PATH:?Define DRIVEMPVD_STORAGE_PATH in docker/.env}
@@ -104,6 +202,10 @@ services:
       start_period: 5s
     networks:
       - edge
+    mem_limit: ${DRIVEMPVD_FRONTEND_MEMORY_LIMIT:-256m}
+    mem_reservation: ${DRIVEMPVD_FRONTEND_MEMORY_RESERVATION:-64m}
+    cpus: ${DRIVEMPVD_FRONTEND_CPU_LIMIT:-0.25}
+    pids_limit: ${DRIVEMPVD_FRONTEND_PIDS_LIMIT:-128}
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -113,6 +215,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=16m
     user: "101:101"
     restart: unless-stopped
+    logging: *logging
 
   nginx:
     build:
@@ -120,7 +223,7 @@ services:
       dockerfile: docker/nginx/Dockerfile
     image: drivempvd-nginx:${DRIVEMPVD_IMAGE_TAG:-local}
     env_file:
-      - ./docker/.env
+      - ${DRIVEMPVD_COMPOSE_ENV_FILE:-./docker/.env}
     depends_on:
       api:
         condition: service_healthy
@@ -143,8 +246,24 @@ services:
       - "${DRIVEMPVD_HTTP_PORT:-8080}:80"
       - "${DRIVEMPVD_HTTPS_PORT:-8443}:443"
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${DRIVEMPVD_NGINX_MEMORY_LIMIT:-512m}
+    mem_reservation: ${DRIVEMPVD_NGINX_MEMORY_RESERVATION:-128m}
+    cpus: ${DRIVEMPVD_NGINX_CPU_LIMIT:-0.5}
+    pids_limit: ${DRIVEMPVD_NGINX_PIDS_LIMIT:-256}
+    read_only: true
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
     volumes:
       - type: bind
         source: ${DRIVEMPVD_TLS_CERTIFICATES_PATH:-./docker/certificates}

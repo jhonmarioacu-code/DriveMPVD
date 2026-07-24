@@ -285,6 +285,17 @@ class CompleteUploadUseCase(UploadUseCase):
                         raise UploadValidationError(
                             "The uploaded content was rejected."
                         )
+                # Lock the parent folder so that concurrent completions with the
+                # same filename cannot both pass the name_exists() check before
+                # either transaction commits. This mirrors the lock acquired by
+                # StartUploadUseCase and ensures the database unique constraint
+                # is the last line of defence, not the first.
+                parent = await unit_of_work.storage.get_folder(
+                    upload.parent_id,
+                    for_update=True,
+                )
+                if parent is None or parent.owner_id != upload.owner_id:
+                    raise StorageEntryNotFoundError()
                 if await unit_of_work.storage.name_exists(
                     parent_id=upload.parent_id,
                     normalized_name=EntryName.create(upload.original_name).normalized,

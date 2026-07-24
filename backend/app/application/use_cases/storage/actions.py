@@ -22,7 +22,7 @@ from app.application.exceptions import (
 )
 from app.application.ports.auth_services import Clock
 from app.application.ports.identifiers import IdGenerator
-from app.application.ports.storage_repository import StorageRepository
+from app.application.ports.storage_repository import StorageRepository, StorageTreeNode
 from app.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from app.application.use_cases.storage.mappers import entry_to_dto, trash_to_dto
 from app.domain.storage.entities import (
@@ -240,10 +240,28 @@ class CopyEntryUseCase(StorageUseCase):
         )
         await unit_of_work.storage.add_folder(copied_root)
         folder_ids: dict[UUID, UUID] = {source.id: copied_root.id}
+
+        # First pass: collect all nodes from the subtree stream.
+        nodes: list[StorageTreeNode] = []
         async for node in unit_of_work.storage.stream_subtree(source.id):
-            child = node.entry
-            if child.id == source.id:
+            if node.entry.id == source.id:
                 continue
+            nodes.append(node)
+
+        # Batch-fetch all current versions for file nodes in a single query,
+        # eliminating the N+1 that a per-file get_current_version would cause.
+        file_ids = tuple(
+            node.entry.id for node in nodes if isinstance(node.entry, File)
+        )
+        versions: dict[UUID, FileVersion] = {}
+        if file_ids:
+            versions = await unit_of_work.storage.get_current_versions_batch(
+                file_ids
+            )
+
+        # Second pass: copy each node using the pre-fetched versions.
+        for node in nodes:
+            child = node.entry
             if child.parent_id is None or child.parent_id not in folder_ids:
                 raise InvalidStateTransitionError("Subtree order is inconsistent.")
             new_parent_id = folder_ids[child.parent_id]
@@ -261,9 +279,15 @@ class CopyEntryUseCase(StorageUseCase):
                 await unit_of_work.storage.add_folder(copied_folder)
                 folder_ids[child.id] = copied_folder.id
             else:
-                await self._copy_file(
+                version = versions.get(child.id)
+                if version is None:
+                    raise InvalidStateTransitionError(
+                        "The file has no current version."
+                    )
+                await self._copy_file_from_version(
                     unit_of_work,
                     source=child,
+                    version=version,
                     parent_id=new_parent_id,
                     name=child_name,
                     now=now,
@@ -282,6 +306,25 @@ class CopyEntryUseCase(StorageUseCase):
         version = await unit_of_work.storage.get_current_version(source.id)
         if version is None:
             raise InvalidStateTransitionError("The file has no current version.")
+        return await self._copy_file_from_version(
+            unit_of_work,
+            source=source,
+            version=version,
+            parent_id=parent_id,
+            name=name,
+            now=now,
+        )
+
+    async def _copy_file_from_version(
+        self,
+        unit_of_work: UnitOfWork,
+        *,
+        source: File,
+        version: FileVersion,
+        parent_id: UUID,
+        name: EntryName,
+        now: datetime,
+    ) -> File:
         file_id = self._id_generator.new()
         internal_name = (
             f"{file_id}.{name.extension}" if name.extension else str(file_id)

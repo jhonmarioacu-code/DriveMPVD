@@ -4,6 +4,11 @@ set -eu
 : "${DRIVEMPVD_NGINX_CLIENT_MAX_BODY_SIZE:=50g}"
 export DRIVEMPVD_NGINX_CLIENT_MAX_BODY_SIZE
 
+runtime_root=/tmp/drivempvd-nginx
+runtime_config="$runtime_root/nginx.conf"
+runtime_conf_directory="$runtime_root/conf.d"
+install -d -m 0755 "$runtime_conf_directory"
+
 if [ "${DRIVEMPVD_ENVIRONMENT:-}" = "production" ]; then
   case "${DRIVEMPVD_TLS_ENABLED:-}" in
     true|TRUE|1|yes|YES) ;;
@@ -33,6 +38,6 @@ esac
 
 envsubst '${DRIVEMPVD_NGINX_CLIENT_MAX_BODY_SIZE}' \
   < /etc/nginx/drivempvd/nginx.conf.template \
-  > /etc/nginx/nginx.conf
-cp "$server_configuration" /etc/nginx/conf.d/default.conf
-nginx -t
+  > "$runtime_config"
+cp "$server_configuration" "$runtime_conf_directory/default.conf"
+nginx -t -c "$runtime_config"

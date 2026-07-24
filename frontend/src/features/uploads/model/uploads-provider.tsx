@@ -17,11 +17,14 @@ import {
   startUpload,
 } from "@/features/uploads/api/uploads-api";
 import {
-  UploadsContext,
-  type UploadsContextValue,
+  UploadsDispatchContext,
+  UploadsStateContext,
+  type UploadsDispatchValue,
+  type UploadsStateValue,
 } from "@/features/uploads/model/uploads-context";
 import { createProgressReporter } from "@/features/uploads/model/progress-reporter";
 import { ApiClientError } from "@/shared/api/client";
+import { queryNamespaces } from "@/shared/query-keys";
 
 import type { UploadTask } from "@/features/uploads/model/types";
 
@@ -174,7 +177,7 @@ export function UploadsProvider({ children }: PropsWithChildren) {
           completedEntry,
           error: null,
         });
-        await queryClient.invalidateQueries({ queryKey: ["explorer"] });
+        await queryClient.invalidateQueries({ queryKey: queryNamespaces.explorer });
       } catch (error) {
         const currentTask = tasksRef.current.find((task) => task.id === taskId);
         if (controller.signal.aborted || currentTask?.state === "cancelled") return;
@@ -280,16 +283,30 @@ export function UploadsProvider({ children }: PropsWithChildren) {
     [replaceTasks],
   );
 
-  const value = useMemo<UploadsContextValue>(
+  // Dispatch context value: stable references — never changes after mount
+  // Components consuming only dispatch will NOT re-render on upload progress.
+  const dispatchValue = useMemo<UploadsDispatchValue>(
     () => ({
-      tasks,
       enqueueFiles,
       retryUpload,
       cancelUpload: cancelTask,
       removeUpload,
     }),
-    [cancelTask, enqueueFiles, removeUpload, retryUpload, tasks],
+    [cancelTask, enqueueFiles, removeUpload, retryUpload],
   );
 
-  return <UploadsContext.Provider value={value}>{children}</UploadsContext.Provider>;
+  // State context value: changes on every task update (including progress ticks)
+  // Only components that render progress should consume this.
+  const stateValue = useMemo<UploadsStateValue>(
+    () => ({ tasks }),
+    [tasks],
+  );
+
+  return (
+    <UploadsDispatchContext.Provider value={dispatchValue}>
+      <UploadsStateContext.Provider value={stateValue}>
+        {children}
+      </UploadsStateContext.Provider>
+    </UploadsDispatchContext.Provider>
+  );
 }

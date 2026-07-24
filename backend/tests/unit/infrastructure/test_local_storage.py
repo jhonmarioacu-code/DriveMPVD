@@ -58,6 +58,7 @@ async def test_local_provider_stages_publishes_ranges_and_deletes(
 
     await provider.delete(stored.key)
     await provider.delete(stored.key)
+    assert await provider.stat(stored.key) is None
 
 
 async def test_local_provider_rolls_back_failed_append_and_confines_keys(

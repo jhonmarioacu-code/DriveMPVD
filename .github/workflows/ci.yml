@@ -1,0 +1,57 @@
+name: Quality gates
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deployment-contract:
+    name: Deployment contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Validate shell and Compose syntax
+        run: |
+          find docker scripts -type f -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+          python3 -m py_compile docker/preflight.py
+          docker compose --env-file docker/.env.example -f compose.yaml config --quiet
+
+  source-security:
+    name: Source security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Scan source secrets and configuration
+        run: sudo bash docker/verify-source-security.sh
+
+  backend:
+    name: Backend PostgreSQL suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Run lint, types, tests, and coverage
+        run: sudo sh docker/verify-postgresql-tests.sh
+
+  frontend:
+    name: Frontend suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Run format, lint, types, tests, build, and npm audit
+        run: sudo sh docker/verify-frontend.sh

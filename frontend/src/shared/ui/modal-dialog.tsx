@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
-import { useEffect, type PropsWithChildren, type ReactNode } from "react";
+import { useEffect, useRef, type PropsWithChildren, type ReactNode } from "react";
 
+import { focusFirst, trapFocus } from "@/shared/ui/focus-trap";
 import { cn } from "@/shared/utils/cn";
 
 interface ModalDialogProps extends PropsWithChildren {
@@ -21,13 +22,28 @@ export function ModalDialog({
   onClose,
   title,
 }: ModalDialogProps) {
+  const dialogReference = useRef<HTMLElement>(null);
+  const onCloseReference = useRef(onClose);
+
   useEffect(() => {
+    onCloseReference.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseReference.current();
     };
     document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+    const dialog = dialogReference.current;
+    focusFirst(dialog);
+
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, []);
 
   return (
     <div
@@ -45,7 +61,10 @@ export function ModalDialog({
           "w-full max-w-md rounded-2xl border border-border bg-surface shadow-2xl",
           className,
         )}
+        onKeyDown={(event) => trapFocus(event, dialogReference.current)}
+        ref={dialogReference}
         role="dialog"
+        tabIndex={-1}
       >
         <header className="flex items-start gap-4 border-b border-border p-5">
           <div className="min-w-0 flex-1">

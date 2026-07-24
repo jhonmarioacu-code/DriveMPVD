@@ -1,5 +1,9 @@
 """SQLAlchemy models; never exported as domain entities."""
 
+from app.infrastructure.persistence.models.activity import (
+    FavoriteModel,
+    RecentOpenModel,
+)
 from app.infrastructure.persistence.models.auth import (
     AdminAccountModel,
     AuthRateLimitModel,
@@ -24,10 +28,12 @@ __all__ = [
     "AuthRateLimitModel",
     "AuthSessionModel",
     "Base",
+    "FavoriteModel",
     "FileMetadataModel",
     "FileVersionModel",
     "OutboxEventModel",
     "PreviewModel",
+    "RecentOpenModel",
     "SecurityEventModel",
     "StorageEntryModel",
     "StorageObjectModel",

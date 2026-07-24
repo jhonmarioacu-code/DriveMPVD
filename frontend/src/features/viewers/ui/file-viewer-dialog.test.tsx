@@ -67,7 +67,8 @@ describe("FileViewerDialog", () => {
     await user.click(screen.getByRole("button", { name: "Acercar imagen" }));
     await user.click(screen.getByRole("button", { name: "Girar imagen" }));
     expect(screen.getByText("125%")).toBeVisible();
-    expect(image).toHaveStyle("transform: scale(1.25) rotate(90deg)");
+    expect(image).toHaveClass("viewer-image-zoom-125", "viewer-image-rotate-90");
+    expect(image).not.toHaveAttribute("style");
     await user.click(screen.getByRole("button", { name: "Descargar" }));
     await user.click(screen.getByRole("button", { name: "Abrir aparte" }));
     await user.click(screen.getByRole("button", { name: "Cerrar" }));

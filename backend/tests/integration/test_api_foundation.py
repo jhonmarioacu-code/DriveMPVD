@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -17,7 +18,7 @@ def app() -> FastAPI:
         app_name="DriveMPVD Test",
         app_version="1.2.3",
         environment=AppEnvironment.TEST,
-        storage_root="C:/test-storage",
+        storage_root=Path.cwd().anchor,
     )
     application = create_application(settings)
 

@@ -3,12 +3,15 @@
 import asyncio
 import os
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO, cast
 from uuid import UUID
 
 from app.application.ports.file_storage import (
     ByteRangeDTO,
+    PhysicalObjectDTO,
+    StagedUploadDTO,
     StorageKey,
     StoredObjectDTO,
 )
@@ -32,6 +35,7 @@ class LocalFileStorageProvider:
         self._root = root.resolve()
         self._staging = self._root / "staging"
         self._objects = self._root / "objects"
+        self._lost_found = self._root / "lost+found"
         self._block_size = stream_block_size
         self._write_buffer_size = write_buffer_size or stream_block_size
 
@@ -41,6 +45,7 @@ class LocalFileStorageProvider:
             await asyncio.to_thread(self._staging.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(self._objects.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(self._create_empty, path)
+            await asyncio.to_thread(self._fsync_directory, path.parent)
         except OSError as exc:
             raise FileStorageError() from exc
 
@@ -97,6 +102,8 @@ class LocalFileStorageProvider:
             if await asyncio.to_thread(destination.exists):
                 raise FileStorageError("The destination object already exists.")
             await asyncio.to_thread(os.replace, source, destination)
+            await asyncio.to_thread(self._fsync_directory, source.parent)
+            await asyncio.to_thread(self._fsync_directory, destination.parent)
             return StoredObjectDTO(key=key, size=actual_size)
         except FileStorageError:
             raise
@@ -116,9 +123,11 @@ class LocalFileStorageProvider:
 
     async def discard_upload(self, upload_id: UUID) -> None:
         try:
-            await asyncio.to_thread(
-                self._staging_path(upload_id).unlink, missing_ok=True
-            )
+            path = self._staging_path(upload_id)
+            existed = await asyncio.to_thread(path.exists)
+            await asyncio.to_thread(path.unlink, missing_ok=True)
+            if existed:
+                await asyncio.to_thread(self._fsync_directory, path.parent)
         except OSError as exc:
             raise FileStorageError() from exc
 
@@ -156,7 +165,66 @@ class LocalFileStorageProvider:
 
     async def delete(self, key: StorageKey) -> None:
         try:
-            await asyncio.to_thread(self._key_path(key).unlink, missing_ok=True)
+            path = self._key_path(key)
+            existed = await asyncio.to_thread(path.exists)
+            await asyncio.to_thread(path.unlink, missing_ok=True)
+            if existed:
+                await asyncio.to_thread(self._fsync_directory, path.parent)
+        except OSError as exc:
+            raise FileStorageError() from exc
+
+    async def list_objects(self) -> AsyncIterator[PhysicalObjectDTO]:
+        async for path in self._walk_regular_files(self._objects):
+            try:
+                stat = await asyncio.to_thread(path.stat, follow_symlinks=False)
+                relative = path.relative_to(self._root).as_posix()
+            except (FileNotFoundError, OSError, ValueError):
+                continue
+            yield PhysicalObjectDTO(
+                key=StorageKey(relative),
+                size=stat.st_size,
+                modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC),
+            )
+
+    async def list_staged_uploads(self) -> AsyncIterator[StagedUploadDTO]:
+        async for path in self._walk_regular_files(self._staging):
+            if path.parent != self._staging or path.suffix != ".part":
+                continue
+            try:
+                upload_id = UUID(path.stem)
+                if path.name != f"{upload_id}.part":
+                    continue
+                stat = await asyncio.to_thread(path.stat, follow_symlinks=False)
+            except (FileNotFoundError, OSError, ValueError):
+                continue
+            yield StagedUploadDTO(
+                upload_id=upload_id,
+                size=stat.st_size,
+                modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC),
+            )
+
+    async def quarantine(self, key: StorageKey) -> None:
+        """Move an unknown object out of the live namespace without deleting it."""
+        source = self._key_path(key)
+        logical = PurePosixPath(str(key))
+        destination = self._lost_found / Path(*logical.parts)
+        try:
+            if not await asyncio.to_thread(source.exists):
+                return
+            await asyncio.to_thread(
+                destination.parent.mkdir,
+                parents=True,
+                exist_ok=True,
+            )
+            if await asyncio.to_thread(destination.exists):
+                raise FileStorageError(
+                    "The quarantine destination already exists; manual review is required."
+                )
+            await asyncio.to_thread(os.replace, source, destination)
+            await asyncio.to_thread(self._fsync_directory, source.parent)
+            await asyncio.to_thread(self._fsync_directory, destination.parent)
+        except FileStorageError:
+            raise
         except OSError as exc:
             raise FileStorageError() from exc
 
@@ -213,9 +281,55 @@ class LocalFileStorageProvider:
         return candidate
 
     @staticmethod
+    async def _walk_regular_files(root: Path) -> AsyncIterator[Path]:
+        """Walk without following symlinks and without retaining the whole tree."""
+        if not await asyncio.to_thread(root.is_dir):
+            return
+        pending = [root]
+        while pending:
+            directory = pending.pop()
+            try:
+                directories, files = await asyncio.to_thread(
+                    LocalFileStorageProvider._directory_entries,
+                    directory,
+                )
+            except OSError as exc:
+                raise FileStorageError() from exc
+            pending.extend(reversed(directories))
+            for path in files:
+                yield path
+
+    @staticmethod
+    def _directory_entries(directory: Path) -> tuple[list[Path], list[Path]]:
+        directories: list[Path] = []
+        files: list[Path] = []
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if entry.is_symlink():
+                    continue
+                if entry.is_dir(follow_symlinks=False):
+                    directories.append(Path(entry.path))
+                elif entry.is_file(follow_symlinks=False):
+                    files.append(Path(entry.path))
+        directories.sort(key=lambda path: path.name)
+        files.sort(key=lambda path: path.name)
+        return directories, files
+
+    @staticmethod
     def _create_empty(path: Path) -> None:
         with path.open("xb"):
             pass
+
+    @staticmethod
+    def _fsync_directory(path: Path) -> None:
+        """Persist directory entries on POSIX; Windows has no directory fsync."""
+        if os.name != "posix":
+            return
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
     @staticmethod
     def _handle_size(handle: object) -> int:

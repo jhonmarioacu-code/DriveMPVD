@@ -13,9 +13,16 @@ from app.application.ports.file_storage import FileStorageProvider
 from app.application.ports.identifiers import IdGenerator
 from app.application.ports.unit_of_work import UnitOfWorkFactory
 from app.application.ports.upload_services import MimeDetector, UploadMetricsRecorder
+from app.application.use_cases.activity import (
+    ListActivityUseCase,
+    RecordRecentOpenUseCase,
+    RemoveFavoriteUseCase,
+    SetFavoriteUseCase,
+)
 from app.application.use_cases.auth import (
     AuthenticateAccessUseCase,
     BootstrapAdminUseCase,
+    ChangeAdminPasswordUseCase,
     LoginUseCase,
     LogoutUseCase,
     RefreshSessionUseCase,
@@ -34,6 +41,7 @@ from app.application.use_cases.storage import (
     MoveEntryUseCase,
     PermanentlyDeleteUseCase,
     PrepareFileDownloadUseCase,
+    ProcessStorageOutboxUseCase,
     RenameEntryUseCase,
     RestoreEntryUseCase,
     StartUploadUseCase,
@@ -71,10 +79,16 @@ class ApplicationContainer:
     database: Database
     authenticate_access: AuthenticateAccessUseCase
     bootstrap_admin: BootstrapAdminUseCase
+    change_admin_password: ChangeAdminPasswordUseCase
     login: LoginUseCase
     refresh_session: RefreshSessionUseCase
     logout: LogoutUseCase
     revoke_all_sessions: RevokeAllSessionsUseCase
+    list_favorites: ListActivityUseCase
+    list_recents: ListActivityUseCase
+    set_favorite: SetFavoriteUseCase
+    remove_favorite: RemoveFavoriteUseCase
+    record_recent_open: RecordRecentOpenUseCase
     create_folder: CreateFolderUseCase
     rename_entry: RenameEntryUseCase
     move_entry: MoveEntryUseCase
@@ -82,6 +96,7 @@ class ApplicationContainer:
     trash_entry: TrashEntryUseCase
     restore_entry: RestoreEntryUseCase
     permanently_delete: PermanentlyDeleteUseCase
+    process_storage_outbox: ProcessStorageOutboxUseCase
     get_folder_navigation: GetFolderNavigationUseCase
     list_folder_entries: ListFolderEntriesUseCase
     get_file_details: GetFileDetailsUseCase
@@ -170,6 +185,14 @@ class ApplicationContainer:
                 secrets=secrets,
                 policy=policy,
             ),
+            change_admin_password=ChangeAdminPasswordUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                password_hasher=password_hasher,
+                id_generator=id_generator,
+                clock=clock,
+                secrets=secrets,
+                policy=policy,
+            ),
             login=LoginUseCase(
                 unit_of_work_factory=unit_of_work_factory,
                 rate_limiter=rate_limiter,
@@ -201,6 +224,19 @@ class ApplicationContainer:
                 secrets=secrets,
                 clock=clock,
             ),
+            list_favorites=ListActivityUseCase(
+                unit_of_work_factory,
+                clock,
+                kind="favorites",
+            ),
+            list_recents=ListActivityUseCase(
+                unit_of_work_factory,
+                clock,
+                kind="recents",
+            ),
+            set_favorite=SetFavoriteUseCase(unit_of_work_factory, clock),
+            remove_favorite=RemoveFavoriteUseCase(unit_of_work_factory, clock),
+            record_recent_open=RecordRecentOpenUseCase(unit_of_work_factory, clock),
             create_folder=CreateFolderUseCase(
                 unit_of_work_factory=unit_of_work_factory,
                 id_generator=id_generator,
@@ -234,6 +270,11 @@ class ApplicationContainer:
             permanently_delete=PermanentlyDeleteUseCase(
                 unit_of_work_factory=unit_of_work_factory,
                 id_generator=id_generator,
+                clock=clock,
+            ),
+            process_storage_outbox=ProcessStorageOutboxUseCase(
+                unit_of_work_factory=unit_of_work_factory,
+                storage=file_storage,
                 clock=clock,
             ),
             get_folder_navigation=GetFolderNavigationUseCase(unit_of_work_factory),

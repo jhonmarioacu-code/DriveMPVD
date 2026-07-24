@@ -24,6 +24,7 @@ dev = [
   "black>=25.1,<27.0",
   "httpx>=0.28,<1.0",
   "mypy>=1.17,<2.0",
+  "pip-audit>=2.10,<3.0",
   "pip-tools>=7.5,<8.0",
   "pytest>=8.4,<10.0",
   "pytest-asyncio>=1.1,<2.0",

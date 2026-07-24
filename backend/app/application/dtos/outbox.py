@@ -91,3 +91,33 @@ class OutboxPageDTO:
 
     items: tuple[OutboxMessageDTO, ...]
     next_cursor: OutboxCursorDTO | None
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessStorageOutboxCommandDTO:
+    """Bounded work requested from the storage-outbox consumer."""
+
+    event_batch_size: int
+    orphan_batch_size: int
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.event_batch_size <= 200:
+            raise ApplicationValidationError(
+                "event_batch_size must be between 1 and 200."
+            )
+        if not 1 <= self.orphan_batch_size <= 1_000:
+            raise ApplicationValidationError(
+                "orphan_batch_size must be between 1 and 1000."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessStorageOutboxResultDTO:
+    """Observable result of one bounded storage-outbox polling cycle."""
+
+    events_seen: int
+    events_processed: int
+    events_deferred: int
+    events_failed: int
+    metadata_objects_deleted: int
+    physical_objects_deleted: int

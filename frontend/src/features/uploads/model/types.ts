@@ -1,4 +1,4 @@
-import type { StorageEntry } from "@/features/explorer/model/types";
+import type { StorageEntry } from "@/features/explorer/public";
 
 export type UploadTaskState =
   "pending" | "uploading" | "completed" | "error" | "cancelled";

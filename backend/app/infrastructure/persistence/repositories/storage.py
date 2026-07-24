@@ -5,7 +5,17 @@ from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import Integer, delete, func, literal, select, tuple_, update
+from sqlalchemy import (
+    Integer,
+    and_,
+    delete,
+    exists,
+    func,
+    literal,
+    select,
+    tuple_,
+    update,
+)
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +27,9 @@ from app.application.dtos.storage import (
     StorageListFiltersDTO,
     StoragePageCursorDTO,
     StorageSortField,
+    TrashCursorDTO,
 )
-from app.application.ports.storage_repository import StorageTreeNode
+from app.application.ports.storage_repository import StorageTreeNode, TrashedEntryRecord
 from app.domain.storage.entities import (
     File,
     FileVersion,
@@ -33,11 +44,50 @@ from app.infrastructure.exceptions import PersistenceError
 from app.infrastructure.persistence.models.storage import (
     FileMetadataModel,
     FileVersionModel,
+    PreviewModel,
     StorageEntryModel,
     StorageObjectModel,
+    ThumbnailModel,
     TrashItemModel,
     UploadSessionModel,
 )
+
+
+def storage_entry_from_models(
+    model: StorageEntryModel,
+    file_model: FileMetadataModel | None,
+) -> Folder | File:
+    """Map a storage projection shared by storage and activity repositories."""
+    if model.entry_type == EntryType.FOLDER.value:
+        return Folder(
+            id=model.id,
+            owner_id=model.owner_id,
+            parent_id=model.parent_id,
+            name=model.name,
+            normalized_name=model.normalized_name,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+            deleted_at=model.deleted_at,
+        )
+    if file_model is None:
+        raise PersistenceError("File metadata is missing.")
+    return File(
+        id=model.id,
+        owner_id=model.owner_id,
+        parent_id=model.parent_id,
+        name=model.name,
+        normalized_name=model.normalized_name,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        deleted_at=model.deleted_at,
+        original_name=file_model.original_name,
+        internal_name=file_model.internal_name,
+        size=file_model.size,
+        mime_type=file_model.mime_type,
+        extension=file_model.extension,
+        checksum_sha256=file_model.checksum_sha256,
+        current_version_number=file_model.current_version_number,
+    )
 
 
 class SQLAlchemyStorageRepository:
@@ -296,17 +346,87 @@ class SQLAlchemyStorageRepository:
             raise PersistenceError() from exc
         if model is None:
             return None
-        return StorageObject(
-            id=model.id,
-            storage_key=model.storage_key,
-            size=model.size,
-            mime_type=model.mime_type,
-            checksum_sha256=model.checksum_sha256,
-            status=StorageObjectStatus(model.status),
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-            deleted_at=model.deleted_at,
+        return self._to_storage_object(model)
+
+    async def get_storage_objects_by_keys(
+        self,
+        keys: tuple[str, ...],
+    ) -> tuple[StorageObject, ...]:
+        if not keys:
+            return ()
+        statement = select(StorageObjectModel).where(
+            StorageObjectModel.storage_key.in_(keys)
         )
+        try:
+            models = (await self._session.scalars(statement)).all()
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return tuple(self._to_storage_object(model) for model in models)
+
+    async def list_storage_objects(
+        self,
+        *,
+        after_id: UUID | None,
+        limit: int,
+    ) -> tuple[tuple[StorageObject, ...], UUID | None]:
+        statement = select(StorageObjectModel)
+        if after_id is not None:
+            statement = statement.where(StorageObjectModel.id > after_id)
+        statement = statement.order_by(StorageObjectModel.id).limit(limit + 1)
+        try:
+            models = list((await self._session.scalars(statement)).all())
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        visible = models[:limit]
+        next_cursor = visible[-1].id if len(models) > limit and visible else None
+        return (
+            tuple(self._to_storage_object(model) for model in visible),
+            next_cursor,
+        )
+
+    async def claim_orphan_storage_objects(
+        self,
+        *,
+        limit: int,
+    ) -> tuple[tuple[StorageObject, ...], bool]:
+        """Lock only ready objects with no logical or derived references."""
+        statement = (
+            select(StorageObjectModel)
+            .where(
+                StorageObjectModel.status == StorageObjectStatus.READY.value,
+                self._orphan_storage_object_condition(),
+            )
+            .order_by(StorageObjectModel.created_at, StorageObjectModel.id)
+            .limit(limit + 1)
+            .with_for_update(of=StorageObjectModel, skip_locked=True)
+        )
+        try:
+            models = list((await self._session.scalars(statement)).all())
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        has_more = len(models) > limit
+        return (
+            tuple(self._to_storage_object(model) for model in models[:limit]),
+            has_more,
+        )
+
+    async def delete_claimed_orphan_storage_object(self, object_id: UUID) -> bool:
+        """Delete metadata only when every reference is still absent.
+
+        The worker creates a physical-delete event in the same transaction only
+        after this delete succeeds. A concurrent copy therefore fails at the
+        foreign-key boundary rather than losing physical bytes.
+        """
+        statement = delete(StorageObjectModel).where(
+            StorageObjectModel.id == object_id,
+            StorageObjectModel.status == StorageObjectStatus.READY.value,
+            self._orphan_storage_object_condition(),
+        )
+        try:
+            result = cast(CursorResult[Any], await self._session.execute(statement))
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return bool(result.rowcount)
 
     async def save_entry(self, entry: StorageEntry) -> None:
         statement = (
@@ -365,6 +485,36 @@ class SQLAlchemyStorageRepository:
         except SQLAlchemyError as exc:
             raise PersistenceError() from exc
         return None if model is None else self._to_version(model)
+
+    async def get_current_versions_batch(
+        self,
+        file_ids: tuple[UUID, ...],
+    ) -> dict[UUID, FileVersion]:
+        """Fetch the current version for multiple files in a single query.
+
+        Returns a dict keyed by file_id. Files without a current version are
+        omitted from the result.
+        """
+        if not file_ids:
+            return {}
+        statement = (
+            select(FileVersionModel)
+            .join(
+                FileMetadataModel,
+                FileMetadataModel.entry_id == FileVersionModel.file_id,
+            )
+            .where(
+                FileVersionModel.file_id.in_(file_ids),
+                FileVersionModel.version_number
+                == FileMetadataModel.current_version_number,
+            )
+        )
+        try:
+            result = await self._session.scalars(statement)
+            models = result.all()
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return {model.file_id: self._to_version(model) for model in models}
 
     async def stream_subtree(self, root_id: UUID) -> AsyncIterator[StorageTreeNode]:
         tree = (
@@ -436,6 +586,48 @@ class SQLAlchemyStorageRepository:
             raise PersistenceError() from exc
         return None if model is None else self._to_trash(model)
 
+    async def list_trash(
+        self,
+        *,
+        owner_id: UUID,
+        limit: int,
+        cursor: TrashCursorDTO | None,
+    ) -> tuple[tuple[TrashedEntryRecord, ...], bool]:
+        statement = (
+            select(TrashItemModel, StorageEntryModel, FileMetadataModel)
+            .join(StorageEntryModel, StorageEntryModel.id == TrashItemModel.entry_id)
+            .outerjoin(
+                FileMetadataModel,
+                FileMetadataModel.entry_id == StorageEntryModel.id,
+            )
+            .where(
+                TrashItemModel.deleted_by == owner_id,
+                StorageEntryModel.owner_id == owner_id,
+                StorageEntryModel.deleted_at.is_not(None),
+            )
+        )
+        if cursor is not None:
+            statement = statement.where(
+                tuple_(TrashItemModel.trashed_at, TrashItemModel.id)
+                < tuple_(literal(cursor.trashed_at), literal(cursor.trash_item_id))
+            )
+        statement = statement.order_by(
+            TrashItemModel.trashed_at.desc(), TrashItemModel.id.desc()
+        ).limit(limit + 1)
+        try:
+            rows = (await self._session.execute(statement)).all()
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        has_more = len(rows) > limit
+        records = tuple(
+            TrashedEntryRecord(
+                trash_item=self._to_trash(trash_model),
+                entry=self._to_entry(entry_model, file_model),
+            )
+            for trash_model, entry_model, file_model in rows[:limit]
+        )
+        return records, has_more
+
     async def remove_trash_item(self, trash_item_id: UUID) -> None:
         try:
             await self._session.execute(
@@ -502,6 +694,45 @@ class SQLAlchemyStorageRepository:
         if result.rowcount != 1:
             raise PersistenceError("The upload session no longer exists.")
 
+    async def get_upload_sessions_by_ids(
+        self,
+        upload_ids: tuple[UUID, ...],
+    ) -> tuple[UploadSession, ...]:
+        if not upload_ids:
+            return ()
+        statement = select(UploadSessionModel).where(
+            UploadSessionModel.id.in_(upload_ids)
+        )
+        try:
+            models = (await self._session.scalars(statement)).all()
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return tuple(self._to_upload(model) for model in models)
+
+    async def claim_expired_upload_sessions(
+        self,
+        *,
+        expired_at: datetime,
+        limit: int,
+    ) -> tuple[UploadSession, ...]:
+        statement = (
+            select(UploadSessionModel)
+            .where(
+                UploadSessionModel.status.in_(
+                    (UploadStatus.CREATED.value, UploadStatus.UPLOADING.value)
+                ),
+                UploadSessionModel.expires_at <= expired_at,
+            )
+            .order_by(UploadSessionModel.expires_at, UploadSessionModel.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        try:
+            models = (await self._session.scalars(statement)).all()
+        except SQLAlchemyError as exc:
+            raise PersistenceError() from exc
+        return tuple(self._to_upload(model) for model in models)
+
     async def _update_subtree_deletion(
         self,
         root_id: UUID,
@@ -539,6 +770,17 @@ class SQLAlchemyStorageRepository:
             await self._session.flush()
         except SQLAlchemyError as exc:
             raise PersistenceError() from exc
+
+    @staticmethod
+    def _orphan_storage_object_condition() -> ColumnElement[bool]:
+        """Match objects not retained by a file, thumbnail, or preview."""
+        return and_(
+            ~exists().where(
+                FileVersionModel.storage_object_id == StorageObjectModel.id
+            ),
+            ~exists().where(ThumbnailModel.storage_object_id == StorageObjectModel.id),
+            ~exists().where(PreviewModel.storage_object_id == StorageObjectModel.id),
+        )
 
     @staticmethod
     def _list_sort_expression(sort_by: StorageSortField) -> ColumnElement[Any]:
@@ -618,35 +860,20 @@ class SQLAlchemyStorageRepository:
         model: StorageEntryModel,
         file_model: FileMetadataModel | None,
     ) -> Folder | File:
-        if model.entry_type == EntryType.FOLDER.value:
-            return Folder(
-                id=model.id,
-                owner_id=model.owner_id,
-                parent_id=model.parent_id,
-                name=model.name,
-                normalized_name=model.normalized_name,
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-                deleted_at=model.deleted_at,
-            )
-        if file_model is None:
-            raise PersistenceError("File metadata is missing.")
-        return File(
+        return storage_entry_from_models(model, file_model)
+
+    @staticmethod
+    def _to_storage_object(model: StorageObjectModel) -> StorageObject:
+        return StorageObject(
             id=model.id,
-            owner_id=model.owner_id,
-            parent_id=model.parent_id,
-            name=model.name,
-            normalized_name=model.normalized_name,
+            storage_key=model.storage_key,
+            size=model.size,
+            mime_type=model.mime_type,
+            checksum_sha256=model.checksum_sha256,
+            status=StorageObjectStatus(model.status),
             created_at=model.created_at,
             updated_at=model.updated_at,
             deleted_at=model.deleted_at,
-            original_name=file_model.original_name,
-            internal_name=file_model.internal_name,
-            size=file_model.size,
-            mime_type=file_model.mime_type,
-            extension=file_model.extension,
-            checksum_sha256=file_model.checksum_sha256,
-            current_version_number=file_model.current_version_number,
         )
 
     @staticmethod

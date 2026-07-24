@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +13,7 @@ import {
   getFolderNavigation,
   listFolderEntries,
 } from "@/features/explorer/api/explorer-api";
+import { listActivity, recordRecentOpen } from "@/features/activity/api/activity-api";
 import { ApiClientError } from "@/shared/api/client";
 import { getHealth } from "@/shared/api/system";
 
@@ -30,6 +31,13 @@ vi.mock("@/features/auth/api/auth-api", () => ({
 
 vi.mock("@/shared/api/system", () => ({
   getHealth: vi.fn(),
+}));
+
+vi.mock("@/features/activity/api/activity-api", () => ({
+  listActivity: vi.fn(),
+  setFavorite: vi.fn(),
+  removeFavorite: vi.fn(),
+  recordRecentOpen: vi.fn(),
 }));
 
 vi.mock("@/features/explorer/api/explorer-api", () => ({
@@ -97,6 +105,25 @@ describe("App", () => {
       items: [],
       nextCursor: null,
     });
+    vi.mocked(listActivity).mockReset().mockResolvedValue({
+      items: [],
+      nextCursor: null,
+    });
+    vi.mocked(recordRecentOpen).mockReset().mockResolvedValue({
+      entry_id: rootFolder.id,
+    });
+  });
+
+  it("abre Inicio como experiencia predeterminada", async () => {
+    window.history.replaceState(null, "", "/");
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Todo tu espacio, más cerca.",
+      }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/home");
   });
 
   it("renderiza el shell y confirma la conexión con la API", async () => {
@@ -105,23 +132,112 @@ describe("App", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Tu espacio personal, preparado para lo que sigue.",
+        name: "Todo tu espacio, más cerca.",
       }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("DriveMPVD")).not.toHaveLength(0);
     expect(await screen.findByText("API disponible")).toBeInTheDocument();
     expect(screen.getByText("DriveMPVD · versión 0.1.0")).toBeInTheDocument();
+    const recents = screen.getAllByRole("link", { name: "Recientes" });
+    expect(recents).not.toHaveLength(0);
+    expect(recents[0]).toHaveAttribute("href", "/recents");
+    const favorites = screen.getAllByRole("link", { name: "Favoritos" });
+    expect(favorites).not.toHaveLength(0);
+    expect(favorites[0]).toHaveAttribute("href", "/favorites");
+  });
+
+  it("muestra los accesos y la actividad reciente en el inicio", async () => {
+    vi.mocked(listActivity).mockResolvedValue({
+      items: [
+        {
+          entry: {
+            ...rootFolder,
+            id: "recent-folder",
+            name: "Proyecto 2026",
+            is_favorite: false,
+          },
+          occurred_at: "2026-07-20T18:00:00Z",
+        },
+      ],
+      nextCursor: null,
+    });
+    window.history.replaceState(null, "", "/home");
+    render(<App />);
+
+    expect(await screen.findByText("Proyecto 2026")).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "Mis archivos" })[0]).toHaveAttribute(
+      "href",
+      "/files",
+    );
+    expect(
+      screen.getByRole("link", { name: "Ver todos los elementos recientes" }),
+    ).toHaveAttribute("href", "/recents");
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Abrir Proyecto 2026" }));
+    await waitFor(() => expect(recordRecentOpen).toHaveBeenCalledWith("recent-folder"));
+    expect(window.location.pathname).toBe("/files/recent-folder");
+  });
+
+  it("abre un archivo reciente y registra la reapertura", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    vi.mocked(listActivity).mockResolvedValue({
+      items: [
+        {
+          entry: {
+            ...rootFolder,
+            id: "recent-file",
+            kind: "file",
+            name: "informe.pdf",
+            size: 1024,
+            mime_type: "application/pdf",
+            extension: "pdf",
+            current_version_number: 1,
+            is_favorite: false,
+          },
+          occurred_at: "2026-07-20T18:00:00Z",
+        },
+      ],
+      nextCursor: null,
+    });
+    window.history.replaceState(null, "", "/home");
+    render(<App />);
+
+    await userEvent
+      .setup()
+      .click(await screen.findByRole("button", { name: "Abrir informe.pdf" }));
+
+    await waitFor(() => expect(recordRecentOpen).toHaveBeenCalledWith("recent-file"));
+    expect(open).toHaveBeenCalledWith(
+      "/api/v1/storage/files/recent-file/content",
+      "_blank",
+      "noopener,noreferrer",
+    );
   });
 
   it("permite abrir y cerrar la navegación móvil", async () => {
     const user = userEvent.setup();
     render(<App />);
     const openButton = await screen.findByRole("button", { name: "Abrir menú" });
+    const main = screen.getByRole("main");
 
     await user.click(openButton);
     expect(openButton).toHaveAttribute("aria-expanded", "true");
+    const mobileNavigation = screen.getByRole("dialog", { name: "Navegación móvil" });
+    const closeButton = within(mobileNavigation).getByRole("button", {
+      name: "Cerrar menú",
+    });
+    expect(closeButton).toHaveFocus();
+    expect(main.closest("[inert]")).toHaveAttribute("inert");
+
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(
+      within(mobileNavigation).getByRole("link", { name: "Favoritos" }),
+    ).toHaveFocus();
+
     await user.keyboard("{Escape}");
     expect(openButton).toHaveAttribute("aria-expanded", "false");
+    expect(openButton).toHaveFocus();
 
     await user.click(openButton);
     await user.click(screen.getByRole("button", { name: "Cerrar menú" }));
@@ -199,7 +315,11 @@ describe("App", () => {
       await screen.findByRole("heading", { name: "Esta página no existe" }),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: /Volver al inicio/ }));
-    expect(await screen.findByRole("heading", { name: "Drive" })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", {
+        name: "Todo tu espacio, más cerca.",
+      }),
+    ).toBeVisible();
   });
 
   it("redirige al login cuando no existe una sesión", async () => {

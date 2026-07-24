@@ -64,6 +64,9 @@ class Settings(BaseSettings):
         ge=64 * 1024,
         le=16 * 1024 * 1024,
     )
+    outbox_worker_poll_seconds: int = Field(default=5, ge=1, le=3_600)
+    outbox_worker_event_batch_size: int = Field(default=32, ge=1, le=200)
+    outbox_orphan_sweep_batch_size: int = Field(default=100, ge=1, le=1_000)
     max_upload_size_bytes: int = Field(
         default=50 * 1024 * 1024 * 1024,
         gt=0,

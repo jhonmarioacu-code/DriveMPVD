@@ -43,7 +43,24 @@ elif [ "$tls_enabled" = "true" ]; then
   echo "DRIVEMPVD_SMOKE_BASE_URL must be set to the certificate hostname for TLS." >&2
   exit 1
 else
-  base_url="http://127.0.0.1:${http_port}"
+  # Compose accepts both a published port (18081) and a loopback binding
+  # (127.0.0.1:18081).  The smoke runs on the Docker host, so normalize the
+  # latter to its published TCP port instead of constructing an invalid URL.
+  published_http_port=$http_port
+  case "$published_http_port" in
+    *:*) published_http_port=${published_http_port##*:} ;;
+  esac
+  case "$published_http_port" in
+    ''|*[!0-9]*)
+      echo "DRIVEMPVD_HTTP_PORT must end with a valid TCP port for a non-TLS smoke test." >&2
+      exit 1
+      ;;
+  esac
+  if [ "$published_http_port" -lt 1 ] || [ "$published_http_port" -gt 65535 ]; then
+    echo "DRIVEMPVD_HTTP_PORT must end with a valid TCP port for a non-TLS smoke test." >&2
+    exit 1
+  fi
+  base_url="http://127.0.0.1:${published_http_port}"
 fi
 csrf_cookie_name=${DRIVEMPVD_SMOKE_CSRF_COOKIE_NAME:-${VITE_CSRF_COOKIE_NAME:-drivempvd_csrf}}
 access_cookie_name=${DRIVEMPVD_SMOKE_ACCESS_COOKIE_NAME:-drivempvd_access}
@@ -78,6 +95,7 @@ range_headers=$(mktemp)
 head_headers=$(mktemp)
 inline_headers=$(mktemp)
 health_headers=$(mktemp)
+root_headers=$(mktemp)
 login_headers=$(mktemp)
 csrf_body=$(mktemp)
 session_body=$(mktemp)
@@ -89,6 +107,7 @@ unset smoke_password
 upload_id=
 file_id=
 folder_id=
+favorite_entry_id=
 csrf_token=
 
 json_value() {
@@ -123,7 +142,22 @@ purge_entry() {
   fi
 }
 
+remove_favorite() {
+  entry_to_unfavorite=${1:-}
+  if [ -z "$entry_to_unfavorite" ] || [ -z "${csrf_token:-}" ]; then
+    return
+  fi
+  curl --silent --show-error \
+    --cookie "$cookies" \
+    --header "X-CSRF-Token: $csrf_token" \
+    --request DELETE \
+    "$base_url/api/v1/activity/favorites/$entry_to_unfavorite" >/dev/null 2>&1 || true
+}
+
 cleanup() {
+  if [ -n "${favorite_entry_id:-}" ]; then
+    remove_favorite "$favorite_entry_id"
+  fi
   if [ -n "${file_id:-}" ]; then
     purge_entry "$file_id"
   fi
@@ -139,21 +173,42 @@ cleanup() {
   fi
   rm -f "$cookies" "$payload" "$downloaded" "$range_body" "$range_headers" \
     "$head_headers" "$inline_headers" "$health_headers" "$login_headers" \
+    "$root_headers" \
     "$csrf_body" "$session_body" "$expected_range" "$login_password" \
     "$login_payload"
 }
 trap cleanup EXIT INT TERM
+
+verify_worker_health() {
+  worker_id=$(docker compose --env-file "$environment_file" -f compose.yaml ps -q worker)
+  if [ -z "$worker_id" ]; then
+    echo "Storage outbox worker container is not running." >&2
+    return 1
+  fi
+  worker_health=$(docker inspect \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+    "$worker_id")
+  if [ "$worker_health" != "healthy" ]; then
+    printf 'Storage outbox worker is not healthy: %s\n' "$worker_health" >&2
+    return 1
+  fi
+}
 
 if [ "${1:-}" = "--start" ]; then
   docker compose --env-file "$environment_file" -f compose.yaml config --quiet
   docker compose --env-file "$environment_file" -f compose.yaml up --build --wait -d
 fi
 
+verify_worker_health
+
 curl --fail --silent --show-error "$base_url/api/v1/ready" >/dev/null
-curl --fail --silent --show-error "$base_url/" | grep -q '<div id="root">'
+curl --fail --silent --show-error --dump-header "$root_headers" "$base_url/" | \
+  grep -q '<div id="root">'
+tr -d '\r' < "$root_headers" | grep -qi '^Cache-Control: no-store$'
 curl --fail --silent --show-error --dump-header "$health_headers" --output /dev/null \
   "$base_url/api/v1/health"
 tr -d '\r' < "$health_headers" | grep -qi '^Content-Security-Policy:'
+tr -d '\r' < "$health_headers" | grep -qi '^Cross-Origin-Embedder-Policy: require-corp$'
 tr -d '\r' < "$health_headers" | grep -qi '^X-Content-Type-Options: nosniff$'
 tr -d '\r' < "$health_headers" | grep -qi '^Referrer-Policy: no-referrer$'
 
@@ -251,6 +306,43 @@ curl --fail --silent --show-error \
 folder_navigation=$(curl --fail --silent --show-error --cookie "$cookies" \
   "$base_url/api/v1/storage/navigation?folder_id=$folder_id")
 [ "$(printf '%s' "$folder_navigation" | json_value 'data.folder.id')" = "$folder_id" ]
+
+favorite=$(curl --fail --silent --show-error \
+  --cookie "$cookies" \
+  --header "X-CSRF-Token: $csrf_token" \
+  --request PUT \
+  "$base_url/api/v1/activity/favorites/$folder_id")
+[ "$(printf '%s' "$favorite" | json_value 'data.is_favorite')" = "True" ]
+favorite_entry_id=$folder_id
+favorites=$(curl --fail --silent --show-error --cookie "$cookies" \
+  "$base_url/api/v1/activity/favorites?limit=50")
+printf '%s' "$favorites" | python3 -c '
+import json
+import sys
+
+entry_id = sys.argv[1]
+items = json.load(sys.stdin)["data"]["items"]
+raise SystemExit(0 if any(item["entry"]["id"] == entry_id for item in items) else 1)
+' "$folder_id"
+
+recent=$(curl --fail --silent --show-error \
+  --cookie "$cookies" \
+  --header "X-CSRF-Token: $csrf_token" \
+  --request POST \
+  "$base_url/api/v1/activity/recents/$folder_id")
+[ "$(printf '%s' "$recent" | json_value 'data.entry_id')" = "$folder_id" ]
+recents=$(curl --fail --silent --show-error --cookie "$cookies" \
+  "$base_url/api/v1/activity/recents?limit=50")
+printf '%s' "$recents" | python3 -c '
+import json
+import sys
+
+entry_id = sys.argv[1]
+items = json.load(sys.stdin)["data"]["items"]
+raise SystemExit(0 if any(item["entry"]["id"] == entry_id for item in items) else 1)
+' "$folder_id"
+remove_favorite "$favorite_entry_id"
+favorite_entry_id=
 
 printf '%%PDF-1.7\nphase-10 deployment smoke test\n%%EOF\n' > "$payload"
 payload_size=$(wc -c < "$payload" | tr -d ' ')

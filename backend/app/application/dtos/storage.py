@@ -46,6 +46,7 @@ class StorageEntryDTO:
     current_version_number: int | None
     created_at: datetime
     updated_at: datetime
+    is_favorite: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +70,25 @@ class TrashItemDTO:
     entry_id: UUID
     original_parent_id: UUID
     trashed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class TrashedEntryDTO:
+    trash_item: TrashItemDTO
+    entry: StorageEntryDTO
+
+
+@dataclass(frozen=True, slots=True)
+class TrashCursorDTO:
+    trashed_at: datetime
+    trash_item_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ListTrashQueryDTO:
+    owner_id: UUID
+    limit: int
+    cursor: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,3 +244,33 @@ class RestoreEntryCommandDTO:
 class PermanentlyDeleteCommandDTO:
     owner_id: UUID
     trash_item_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileStorageCommandDTO:
+    """Bounded-policy request for a complete DB/filesystem reconciliation."""
+
+    execute: bool = False
+    grace_seconds: int = 86_400
+    batch_size: int = 200
+    verify_checksums: bool = False
+
+    def __post_init__(self) -> None:
+        if not 300 <= self.grace_seconds <= 30 * 86_400:
+            raise ValueError("grace_seconds must be between 300 and 2592000")
+        if not 1 <= self.batch_size <= 1_000:
+            raise ValueError("batch_size must be between 1 and 1000")
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileStorageResultDTO:
+    physical_objects_scanned: int = 0
+    orphan_objects_found: int = 0
+    orphan_objects_quarantined: int = 0
+    staged_uploads_scanned: int = 0
+    orphan_staging_found: int = 0
+    orphan_staging_deleted: int = 0
+    database_objects_scanned: int = 0
+    missing_physical_objects: int = 0
+    size_mismatches: int = 0
+    checksum_mismatches: int = 0

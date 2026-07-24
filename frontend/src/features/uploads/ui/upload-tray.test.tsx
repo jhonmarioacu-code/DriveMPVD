@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  UploadsContext,
-  type UploadsContextValue,
+  UploadsDispatchContext,
+  UploadsStateContext,
+  type UploadsDispatchValue,
+  type UploadsStateValue,
 } from "@/features/uploads/model/uploads-context";
 import { UploadTray } from "@/features/uploads/ui/upload-tray";
 
@@ -29,19 +31,21 @@ function task(
 }
 
 function renderTray(tasks: UploadTask[]) {
-  const actions = {
+  const actions: UploadsDispatchValue = {
     enqueueFiles: vi.fn(),
     retryUpload: vi.fn(),
     cancelUpload: vi.fn().mockResolvedValue(undefined),
     removeUpload: vi.fn(),
   };
-  const value: UploadsContextValue = { tasks, ...actions };
+  const stateValue: UploadsStateValue = { tasks };
 
   return {
     ...render(
-      <UploadsContext.Provider value={value}>
-        <UploadTray />
-      </UploadsContext.Provider>,
+      <UploadsDispatchContext.Provider value={actions}>
+        <UploadsStateContext.Provider value={stateValue}>
+          <UploadTray />
+        </UploadsStateContext.Provider>
+      </UploadsDispatchContext.Provider>,
     ),
     actions,
   };

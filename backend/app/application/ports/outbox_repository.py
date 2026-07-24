@@ -25,6 +25,15 @@ class OutboxRepository(Protocol):
         """Return one active message by identifier."""
         ...
 
+    async def get_pending_for_update(
+        self,
+        message_id: UUID,
+        *,
+        skip_locked: bool,
+    ) -> OutboxMessageDTO | None:
+        """Lease one pending message in the current transaction."""
+        ...
+
     async def list(
         self,
         *,
@@ -37,4 +46,18 @@ class OutboxRepository(Protocol):
 
     async def soft_delete(self, message_id: UUID, *, deleted_at: datetime) -> bool:
         """Soft-delete an active message in the current transaction."""
+        ...
+
+    async def mark_processed(self, message_id: UUID, *, processed_at: datetime) -> bool:
+        """Durably acknowledge one leased pending message."""
+        ...
+
+    async def record_failure(
+        self,
+        message_id: UUID,
+        *,
+        attempted_at: datetime,
+        error_kind: str,
+    ) -> bool:
+        """Record a safe retryable failure for one pending message."""
         ...

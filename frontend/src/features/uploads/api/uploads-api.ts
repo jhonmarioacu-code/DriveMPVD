@@ -5,7 +5,7 @@ import type {
   UploadSession,
   UploadStatus,
 } from "@/features/uploads/model/types";
-import type { StorageEntry } from "@/features/explorer/model/types";
+import type { StorageEntry } from "@/features/explorer/public";
 
 export const UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
 

@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { queryNamespaces } from "@/shared/query-keys";
 import {
   createFolder,
   getFileDetails,
@@ -18,7 +19,7 @@ import {
 import type { ExplorerListOptions } from "@/features/explorer/model/types";
 
 export const explorerKeys = {
-  all: ["explorer"] as const,
+  all: queryNamespaces.explorer,
   navigation: (folderId?: string) =>
     [...explorerKeys.all, "navigation", folderId ?? "root"] as const,
   entries: (folderId: string, options: ExplorerListOptions) =>
@@ -57,7 +58,11 @@ export function useFileDetails(fileId: string | null) {
 
 function useInvalidateExplorer() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: explorerKeys.all });
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: explorerKeys.all }),
+      queryClient.invalidateQueries({ queryKey: queryNamespaces.activity }),
+    ]);
 }
 
 export function useCreateFolder() {
